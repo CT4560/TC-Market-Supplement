@@ -1,6 +1,6 @@
-# FFXIV-TW-Market-Data-Supplement
+# TC-Market Supplement
 
-FFXIV 繁中服的市場資料補充專案。這個專案的 Dalamud 插件 FFXIV-TW-Market-Data-Supplement 會在你查看市場板時，把繁中服上 Universalis 沒有價格資料的物品（主要是舊染劑與色素）的掛單和成交紀錄，匿名回報給社群伺服器，讓大家有地方查得到這些價格。
+FFXIV 繁中服的 Dalamud 插件。你在市場板查看物品時，它會把繁中服上 Universalis 沒有價格資料的物品（主要是舊染劑與色素）的掛單和成交紀錄，匿名回報給社群伺服器，讓大家有地方查得到這些價格。
 
 你不需要另外做任何事，平常怎麼用市場板就怎麼用。
 
@@ -24,7 +24,7 @@ FFXIV 繁中服的市場資料補充專案。這個專案的 Dalamud 插件 FFXI
 
 1. 下載 `install.bat`（連結發佈後補上）。
 2. 完全關閉遊戲與啟動器，雙擊 `install.bat`。Windows 跳出警告的話，選「其他資訊」→「仍要執行」。
-3. 進遊戲輸入 `/xlplugins`，搜尋 FFXIV-TW-Market-Data-Supplement 並安裝。
+3. 進遊戲輸入 `/xlplugins`，搜尋 TC-Market Supplement 並安裝。
 
 `install.bat` 是純文字檔，只會把儲存庫網址加進 Dalamud 設定（先備份原檔），不會下載或安裝任何東西。
 
@@ -32,7 +32,7 @@ FFXIV 繁中服的市場資料補充專案。這個專案的 Dalamud 插件 FFXI
 
 1. 遊戲內輸入 `/xlsettings`，打開「試驗性功能」分頁。
 2. 在「第三方外掛程式倉庫」貼上儲存庫網址（與 `install.bat` 相同，發佈後補上），按儲存。
-3. 輸入 `/xlplugins`，搜尋 FFXIV-TW-Market-Data-Supplement 並安裝。
+3. 輸入 `/xlplugins`，搜尋 TC-Market Supplement 並安裝。
 
 ### 手動安裝
 
@@ -50,4 +50,4 @@ FFXIV 繁中服的市場資料補充專案。這個專案的 Dalamud 插件 FFXI
 
 ## 資料的用途
 
-回報的資料由公開的 API 提供給任何人使用，格式與 Universalis 相同，說明在 [server/README.md](server/README.md)；伺服器網域後面加 `/docs/` 有可以直接試用的開發者文件網站（TC-Market Supplement）。開發插件的相關說明在 [DEVELOPMENT.md](DEVELOPMENT.md)。
+回報的資料由公開的 API 提供給任何人使用，格式與 Universalis 相同，說明在 [server/README.md](server/README.md)；伺服器網域後面加 `/docs/` 有可以直接試用的開發者文件網站。開發插件的相關說明在 [DEVELOPMENT.md](DEVELOPMENT.md)。

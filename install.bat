@@ -12,7 +12,7 @@ exit /b
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
-$PluginName = 'FFXIV-TW-Market-Data-Supplement'
+$PluginName = 'TC-Market Supplement'
 $RepoUrl = 'REPLACE_WITH_REPO_URL'
 
 function Say($text, $color = 'White') { Write-Host $text -ForegroundColor $color }

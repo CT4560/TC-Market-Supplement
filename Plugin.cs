@@ -118,7 +118,7 @@ public sealed class Plugin : IDalamudPlugin
         pluginInterface.UiBuilder.Draw += windowSystem.Draw;
         pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
         pluginInterface.UiBuilder.OpenMainUi += OpenSettings;
-        commandManager.AddHandler(CommandName, new CommandInfo(OnCommand) { HelpMessage = "開啟或關閉 FFXIV-TW-Market-Data-Supplement 的設定視窗" });
+        commandManager.AddHandler(CommandName, new CommandInfo(OnCommand) { HelpMessage = "開啟或關閉 TC-Market Supplement 的設定視窗" });
 
         marketBoard.OfferingsReceived += OnOfferings;
         marketBoard.HistoryReceived += OnHistory;
@@ -246,7 +246,7 @@ public sealed class Plugin : IDalamudPlugin
         if (!clientState.IsLoggedIn) return;
 
         framework.Update -= OnFrameworkUpdate;
-        chatGui.Print("[FFXIV-TW-Market-Data-Supplement] 這個插件預設會把你在市場板打開的舊染劑等物品資料（掛單與成交紀錄，含雇員名稱與買家名稱）匿名回報給社群伺服器，不含你自己的角色資訊。不想回報：輸入 /mbcollector，取消「啟用上傳」。");
+        chatGui.Print("[TC-Market Supplement] 這個插件預設會把你在市場板打開的舊染劑等物品資料（掛單與成交紀錄，含雇員名稱與買家名稱）匿名回報給社群伺服器，不含你自己的角色資訊。不想回報：輸入 /mbcollector，取消「啟用上傳」。");
 
         lock (configLock)
         {

@@ -1,6 +1,6 @@
 # 社群回報伺服器
 
-接收 FFXIV-TW-Market-Data-Supplement 插件的匿名上傳，存進自己的 SQLite 資料庫，並提供公開、免金鑰的 REST API 與 WebSocket 即時推播（相容 Universalis v2，時間用 UTC 毫秒）。完全獨立：不依賴任何其他專案的程式碼或資料庫。
+接收 TC-Market Supplement 插件的匿名上傳，存進自己的 SQLite 資料庫，並提供公開、免金鑰的 REST API 與 WebSocket 即時推播（相容 Universalis v2，時間用 UTC 毫秒）。完全獨立：不依賴任何其他專案的程式碼或資料庫。
 
 ## 做什麼
 

@@ -1,9 +1,9 @@
 {
-  "name": "ffxiv-tw-market-data-supplement-server",
+  "name": "tc-market-supplement-server",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "FFXIV-TW-Market-Data-Supplement 的社群回報伺服器：接收插件的匿名上傳，存進自己的 SQLite。",
+  "description": "TC-Market Supplement 的社群回報伺服器：接收插件的匿名上傳，存進自己的 SQLite。",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",

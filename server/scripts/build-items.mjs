@@ -11,7 +11,7 @@ const BRANCH = "main";
 const CSV_URL = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/Item.csv`;
 const COMMIT_API_URL = `https://api.github.com/repos/${REPO}/commits/${BRANCH}`;
 const MARKETABLE_URL = "https://universalis.app/api/v2/marketable";
-const USER_AGENT = "FFXIV-TW-Market-Data-Supplement-build-items";
+const USER_AGENT = "TC-Market-Supplement-build-items";
 
 // 低於這個數量代表 API 有問題，中止
 const MIN_MARKETABLE_COUNT = 10000;
