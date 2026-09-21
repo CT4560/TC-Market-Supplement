@@ -32,6 +32,14 @@ curl "https://api-ffxiv-bot.epicurean-expedition.com/api/v2/陸行鳥/5729,5730?
 
 單一物品回傳物件；查多個物品回 `{ itemIDs, items: { "<id>": {…} }, worldID, unresolvedItems, worldName }`（資料中心版是 `dcName`、沒有 `worldID`）。不在白名單的物品：單一物品回 404，多個物品時列在 `unresolvedItems`。錯誤回應是 ASP.NET 的 problem details（`{ type, title, status, detail?, traceId }`）。
 
+### 資料的性質（給使用這個 API 的開發者）
+
+這裡的資料完全來自玩家**順便**在市場板查價時，外掛被動回報的結果，沒有人被要求去掃描，也沒有任何程式會主動抓取。所以：
+
+- 有些物品可能一直沒有人查過：回應的 `hasData` 是 `false`、`lastUploadTime` 是 0，掛單與成交都是空的。這代表「沒有人回報過」，不代表「沒有人在賣」。
+- 每個物品、每個世界的資料新舊不一，請用 `lastUploadTime`（該世界最近一次被掃描的時間，UTC 毫秒）判斷要不要採用；資料中心版另有 `worldUploadTimes` 分世界。
+- 完整度、新鮮度要不要滿足你的用途，由使用資料的人自行判斷。
+
 ### 跟 Universalis 的差異（請注意）
 
 - **時間一律是 UTC 毫秒**：掛單的 `lastReviewTime`、成交的 `timestamp`、`lastUploadTime`、`worldUploadTimes` 都是毫秒（Universalis 的前兩者是秒）。**請求參數裡的時間長度也是毫秒**（`statsWithin`、`entriesWithin`；Universalis 的 `entriesWithin` 是秒）。
