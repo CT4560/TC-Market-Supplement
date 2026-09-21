@@ -24,8 +24,9 @@ public sealed class Plugin : IDalamudPlugin
     private const string CommandName = "/mbcollector";
 
     // 所有玩家都回報到同一個官方社群伺服器，所以網址寫死在這裡，不讓玩家自己填。
-    // 正式網址還沒決定：發佈前要把這個佔位字串換成真正的網址。還是佔位字串時，即使「啟用上傳」開著也不會送出任何請求。
-    private const string DefaultEndpoint = "https://REPLACE_WITH_SERVER_URL";
+    // 官方社群伺服器的網址（Cloudflare Tunnel 接到 VPS 上的容器）。如果哪天換成還沒填的佔位字串（含 REPLACE_WITH），
+    // 即使「啟用上傳」開著也不會送出任何請求。
+    private const string DefaultEndpoint = "https://api-ffxiv-bot.epicurean-expedition.com";
     private const string EndpointOverrideVariable = "MBCOLLECTOR_ENDPOINT";
 
     private static readonly TimeSpan QuietPeriod = TimeSpan.FromSeconds(2);

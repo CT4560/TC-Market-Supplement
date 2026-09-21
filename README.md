@@ -89,6 +89,6 @@ powershell -NoProfile -File .\pack.ps1
 - 設定視窗（ImGui）目前只做過編譯驗證，還沒有在遊戲內實際操作過。
 - 尚未做「完整掃描全部舊染劑」的實測（需要玩家在遊戲裡逐一點選市場板）。
 - **上傳預設是開啟的**：不想回報的人要自己到 `/mbcollector` 關掉「啟用上傳」。
-- 正式的社群伺服器網址目前還是佔位字串（尚未決定），所以現在即使「啟用上傳」開著，外掛也不會送出任何請求；發佈前必須在 `Plugin.cs` 的 `DefaultEndpoint` 填入實際網址。
+- 伺服器網址寫死在 `Plugin.cs` 的 `DefaultEndpoint`（`https://api-ffxiv-bot.epicurean-expedition.com`）。**用這個版本、沒設環境變數，而且「啟用上傳」開著（預設就是開）時，你掃描到的舊染劑資料會真的送到這個官方伺服器。**
 - 開發者測試用：啟動遊戲前設定環境變數 `MBCOLLECTOR_ENDPOINT`（例如 `$env:MBCOLLECTOR_ENDPOINT = 'http://127.0.0.1:8787'`），外掛就改用這個網址（需要伺服器端設定 `COMMUNITY_UPLOAD_ENABLED=on`）。它不出現在設定視窗，一般玩家不需要也不會用到。
 - 外掛沒有簽章，也沒有發佈到任何公開儲存庫；只適合自己與信任的人使用。
