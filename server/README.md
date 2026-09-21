@@ -57,6 +57,7 @@ curl http://127.0.0.1:8787/health
 - `Dockerfile` 分兩階段：先編譯 TypeScript，執行階段只帶正式環境的相依套件與編譯結果，以非 root 的 `node` 使用者執行，內建健康檢查（打 `/health`）。
 - `docker-compose.yml` 只把埠綁在 `127.0.0.1:8787`，不直接對外；請用同一台機器上的反向代理或 Cloudflare Tunnel 連進來（限流靠 `CF-Connecting-IP` 判斷來源 IP）。
 - 資料庫放在具名資料卷 `collector-data`（容器內 `/data/collector.db`）。備份請備份整個資料卷（SQLite 是 WAL 模式，會有 `-wal`、`-shm` 檔）。
+- 備份：`scripts/backup.sh` 用 SQLite 的 backup API 複製資料庫（服務執行中也安全）、驗證完整性、壓縮成 `collector-<UTC 時間>.db.gz`，預設放 `/root/backups/collector`、保留 14 天（可用 `BACKUP_DIR`、`KEEP_DAYS`、`VOLUME` 環境變數調整）。用 cron 每天跑一次，例如 `10 20 * * * /opt/database-dalamud-collector/scripts/backup.sh`。備份和資料庫在同一台機器，防得了誤刪與資料損壞，防不了整台機器遺失，重要的話請另外把備份檔複製到別處。還原步驟寫在腳本檔頭。
 - 容器以唯讀根檔案系統、丟掉所有 capability、禁止提權、記憶體上限 256 MB 執行。
 - 物品白名單 `data/items.json` 打包在映像檔裡；要更新清單就重新執行 `npm run build-items`、再重新建置映像檔。
 
