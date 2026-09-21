@@ -1,0 +1,11 @@
+{
+  "Author": "charlie",
+  "Name": "Market Board Collector",
+  "InternalName": "MarketBoardCollector",
+  "Punchline": "被動收集繁中服舊染劑等物品的市場板資料，回報給社群伺服器。",
+  "Description": "當你自己打開市場板查看物品時，把 Universalis 沒有資料的物品（例如繁中服的舊染劑）的掛單與成交紀錄，匿名回報給社群伺服器（不需要金鑰或帳號，預設開啟，可在 /mbcollector 關閉）。不會操作遊戲、不會記錄玩家或買家名稱。",
+  "ApplicableVersion": "any",
+  "Tags": ["market"],
+  "IsHide": false,
+  "AcceptsFeedback": false
+}
