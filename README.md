@@ -22,21 +22,16 @@ FFXIV 繁中服的市場資料補充專案。這個專案的 Dalamud 插件 FFXI
 
 ### 快速安裝（建議）
 
-1. 下載 `install.bat`（下載連結會在發佈後補在這裡）。
-2. 完全關閉遊戲與啟動器。
-3. 雙擊 `install.bat`。如果 Windows 跳出安全性警告，選「其他資訊」再按「仍要執行」。
-4. 出現「完成」後啟動遊戲，輸入 `/xlplugins`，搜尋 FFXIV-TW-Market-Data-Supplement 並安裝。
+1. 下載 `install.bat`（連結發佈後補上）。
+2. 完全關閉遊戲與啟動器，雙擊 `install.bat`。Windows 跳出警告的話，選「其他資訊」→「仍要執行」。
+3. 進遊戲輸入 `/xlplugins`，搜尋 FFXIV-TW-Market-Data-Supplement 並安裝。
 
-`install.bat` 是純文字檔，可以用記事本打開檢查。它只做一件事：把本插件的儲存庫網址加進台灣服 Dalamud 的設定檔（改之前會先備份原檔，備份在同一個資料夾），不會下載也不會安裝任何東西。找不到設定檔、遊戲還開著或設定檔有問題時，它會說明原因並且不改任何檔案。
-
-之後有新版本，會直接出現在 `/xlplugins` 的更新清單裡。
+`install.bat` 是純文字檔，只會把儲存庫網址加進 Dalamud 設定（先備份原檔），不會下載或安裝任何東西。
 
 ### 自己加入儲存庫
 
-不想用 `install.bat` 的話，可以在遊戲裡手動加：
-
 1. 遊戲內輸入 `/xlsettings`，打開「試驗性功能」分頁。
-2. 在「第三方外掛程式倉庫」貼上儲存庫網址並加入，按儲存。儲存庫網址與 `install.bat` 裡的一樣，會在發佈後補在這裡。
+2. 在「第三方外掛程式倉庫」貼上儲存庫網址（與 `install.bat` 相同，發佈後補上），按儲存。
 3. 輸入 `/xlplugins`，搜尋 FFXIV-TW-Market-Data-Supplement 並安裝。
 
 ### 手動安裝

@@ -65,6 +65,4 @@ $env:MBCOLLECTOR_ENDPOINT = 'http://127.0.0.1:8787'
 
 ## install.bat
 
-批次檔上半段只負責呼叫 PowerShell，`#PS_BEGIN` 之後才是實際的 PowerShell 程式（執行時由批次檔自己讀取、以 UTF-8 解碼），所以批次檔上半段必須維持純 ASCII，檔案用 CRLF（`.gitattributes` 已設定）。網址寫在檔案裡的 `$RepoUrl`，發佈儲存庫後把 `REPLACE_WITH_REPO_URL` 換成正式網址，並同步更新 `repo.json` 的佔位字串與 README。
-
-它直接用文字插入的方式改設定檔，不整份重新序列化，避免動到 Dalamud 其他設定的格式；寫入前會先驗證結果是有效的 JSON、且清單裡剛好有一筆這個網址。測試時可以設環境變數 `DALAMUD_CONFIG_PATH` 指向一份設定檔的複本，別拿真的設定檔試。
+批次檔上半段只呼叫 PowerShell，`#PS_BEGIN` 之後才是 PowerShell 程式，所以上半段要維持純 ASCII、檔案用 CRLF。網址是檔案裡的 `$RepoUrl`，發佈後把 `REPLACE_WITH_REPO_URL` 換掉，並同步 `repo.json` 與 README。測試時設 `DALAMUD_CONFIG_PATH` 指向設定檔的複本，不要拿真的設定檔試。

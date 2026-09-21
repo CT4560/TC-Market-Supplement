@@ -1,6 +1,5 @@
 @echo off
-rem FFXIV-TW-Market-Data-Supplement quick installer.
-rem Adds the plugin repository to the Taiwan-server Dalamud settings. Plain text: open it in Notepad to read it.
+rem Adds the plugin repository to the Taiwan-server Dalamud settings.
 setlocal
 chcp 65001 >nul
 set "SELF=%~f0"
@@ -9,7 +8,7 @@ echo.
 pause
 exit /b
 #PS_BEGIN
-# 把插件儲存庫網址加進台灣服 Dalamud 的設定檔（第三方外掛程式倉庫）。只加網址，不下載也不安裝任何檔案。
+# 把儲存庫網址加進台灣服 Dalamud 的設定檔，只加網址。
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
