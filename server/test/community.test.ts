@@ -155,6 +155,20 @@ describe("上傳資料驗證", () => {
     assert.deepEqual(result.value.sales.map((sale) => sale.buyerName), ["買家甲", "", "", "一二三 四五六", "長".repeat(6)]);
   });
 
+  test("買家名稱裡的「·」算一個字：蓮·阿修貝爾 剛好 6 字通過，再多一個字就略過", () => {
+    const result = validateUpload(
+      upload({
+        sales: [
+          { pricePerUnit: 5, quantity: 1, timestamp: NOW - 1000, buyerName: "蓮·阿修貝爾" },
+          { pricePerUnit: 6, quantity: 1, timestamp: NOW - 2000, buyerName: "蓮·阿修貝爾七" },
+        ],
+      }),
+      ctx,
+    );
+    assert.ok(result.ok);
+    assert.deepEqual(result.value.sales.map((sale) => sale.buyerName), ["蓮·阿修貝爾"]);
+  });
+
   test("成交：太舊的略過（不整筆拒絕）、在未來的拒絕", () => {
     const result = validateUpload(
       upload({
