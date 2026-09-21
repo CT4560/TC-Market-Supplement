@@ -37,8 +37,6 @@ public sealed class Plugin : IDalamudPlugin
     // 整包會被伺服器 400 拒絕，所以外掛端先過濾、截斷，避免因為單一筆爛資料丟掉整次掃描的回報。
     private const int MaxListingsPerUpload = 100;
     private const int MaxSalesPerUpload = 50;
-    // 429（上傳太頻繁）之後暫停上傳一段時間再試，而不是立刻重送，避免持續打爆伺服器。
-    private static readonly TimeSpan UploadBackoff = TimeSpan.FromSeconds(60);
 
     private readonly IDalamudPluginInterface pluginInterface;
     private readonly ICommandManager commandManager;
@@ -46,6 +44,9 @@ public sealed class Plugin : IDalamudPlugin
     private readonly IPlayerState playerState;
     private readonly IDataManager dataManager;
     private readonly IPluginLog log;
+    private readonly IChatGui chatGui;
+    private readonly IFramework framework;
+    private readonly IClientState clientState;
     private readonly string dir;
     private readonly string capturePath;
     private readonly string configPath;
@@ -54,11 +55,14 @@ public sealed class Plugin : IDalamudPlugin
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
     private readonly CancellationTokenSource stop = new();
     private readonly ConcurrentDictionary<uint, Scan> scans = new();
-    private readonly SemaphoreSlim uploadLock = new(1, 1);
     private readonly Timer flushTimer;
     private readonly CollectorStatus status = new();
-    // 只在 uploadLock 保護下讀寫（上傳本來就用這把鎖序列化）。
-    private DateTime uploadBackoffUntilUtc = DateTime.MinValue;
+    // 上傳佇列（見 UploadQueue.cs）：被限流或暫時失敗的掃描結果留在裡面重試，不直接丟掉。queue 只在 queueLock 保護下讀寫。
+    private readonly UploadQueue queue = new();
+    private readonly object queueLock = new();
+    private readonly SentTracker sent = new();
+    private readonly RetryGate itemListGate = new();
+    private int pumping;
     private readonly WindowSystem windowSystem = new("MarketBoardCollector");
     private readonly ConfigWindow configWindow;
 
@@ -86,6 +90,11 @@ public sealed class Plugin : IDalamudPlugin
         public bool ListingsTrimmed;
         public readonly List<object> Listings = new();
         public readonly List<object> Sales = new();
+        // 同一次掃描裡，同一筆掛單（同編號）只留一次：使用者在 2 秒內重開同一個物品時，封包會再來一輪。
+        public readonly HashSet<string> ListingIds = new();
+        // 內容指紋用的關鍵欄位（見 ScanFingerprint），跟 Listings／Sales 一一對應。
+        public readonly List<string> ListingKeys = new();
+        public readonly List<string> SaleKeys = new();
     }
 
     public Plugin(
@@ -94,6 +103,9 @@ public sealed class Plugin : IDalamudPlugin
         IMarketBoard marketBoard,
         IPlayerState playerState,
         IDataManager dataManager,
+        IChatGui chatGui,
+        IFramework framework,
+        IClientState clientState,
         IPluginLog log)
     {
         this.pluginInterface = pluginInterface;
@@ -102,6 +114,9 @@ public sealed class Plugin : IDalamudPlugin
         this.playerState = playerState;
         this.dataManager = dataManager;
         this.log = log;
+        this.chatGui = chatGui;
+        this.framework = framework;
+        this.clientState = clientState;
 
         dir = pluginInterface.GetPluginConfigDirectory();
         Directory.CreateDirectory(dir);
@@ -120,6 +135,9 @@ public sealed class Plugin : IDalamudPlugin
         marketBoard.HistoryReceived += OnHistory;
         flushTimer = new Timer(_ => FlushQuietScans(), null, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
 
+        // 第一次使用：登入遊戲之後在聊天視窗說明一次「預設會回報什麼、怎麼關」。
+        if (!config.NoticeShown) framework.Update += OnFrameworkUpdate;
+
         log.Information(
             "[MarketBoardCollector] started. upload={Upload}, capture file={Path}",
             IsUploadEnabled(config) ? endpoint : (config.UploadEnabled ? "off (server endpoint not set yet)" : "off (disabled in settings)"),
@@ -135,6 +153,7 @@ public sealed class Plugin : IDalamudPlugin
         pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
         pluginInterface.UiBuilder.Draw -= windowSystem.Draw;
         windowSystem.RemoveAllWindows();
+        framework.Update -= OnFrameworkUpdate;
         flushTimer.Dispose();
         stop.Cancel();
         http.Dispose();
@@ -161,6 +180,11 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>目前生效的設定（唯讀快照，不要就地修改）。</summary>
     public CollectorConfig CurrentConfig => config;
 
+    private int QueuedCount()
+    {
+        lock (queueLock) return queue.Count;
+    }
+
     public StatusSnapshot GetStatus()
     {
         var cfg = config;
@@ -178,7 +202,9 @@ public sealed class Plugin : IDalamudPlugin
             s.UploadAt,
             s.ListMessage,
             s.ListAt,
-            Volatile.Read(ref refreshing) == 1);
+            Volatile.Read(ref refreshing) == 1,
+            s.Skipped,
+            QueuedCount());
     }
 
     /// <summary>
@@ -187,25 +213,13 @@ public sealed class Plugin : IDalamudPlugin
     /// </summary>
     public string? SaveConfig(bool uploadEnabled, bool captureToFile)
     {
-        var next = new CollectorConfig { UploadEnabled = uploadEnabled, CaptureToFile = captureToFile };
-
+        CollectorConfig next;
         lock (configLock)
         {
-            try
-            {
-                // 先寫暫存檔再換掉，避免寫到一半當機留下壞掉的 config.json。
-                var tempPath = configPath + ".tmp";
-                File.WriteAllText(tempPath, JsonSerializer.Serialize(next, new JsonSerializerOptions { WriteIndented = true }));
-                File.Move(tempPath, configPath, overwrite: true);
-            }
-            catch (Exception ex)
-            {
-                log.Error(ex, "[MarketBoardCollector] could not write config.json");
-                return "無法寫入 config.json：" + CollectorStatus.Shorten(ex.Message);
-            }
+            next = new CollectorConfig { UploadEnabled = uploadEnabled, CaptureToFile = captureToFile, NoticeShown = config.NoticeShown };
+            var error = PersistConfig(next, out var previous);
+            if (error is not null) return error;
 
-            var previous = config;
-            config = next;
             // 從關閉切回開啟時，舊的「可上傳物品清單」可能已經過期，下次上傳時重新向伺服器要。
             if (!previous.UploadEnabled && next.UploadEnabled)
             {
@@ -213,8 +227,51 @@ public sealed class Plugin : IDalamudPlugin
             }
         }
 
+        // 關掉上傳：還在排隊的掃描結果不送了（使用者不想回報）
+        if (!next.UploadEnabled)
+        {
+            lock (queueLock) queue.Clear();
+        }
+
         log.Information("[MarketBoardCollector] settings saved. upload={Upload}, capture={Capture}", IsUploadEnabled(next) ? "on" : "off", next.CaptureToFile);
         return null;
+    }
+
+    /// <summary>把設定寫進 config.json 並換上新的實例。要在 configLock 裡呼叫。成功回傳 null（previous 是換掉前的設定）。</summary>
+    private string? PersistConfig(CollectorConfig next, out CollectorConfig previous)
+    {
+        previous = config;
+        try
+        {
+            // 先寫暫存檔再換掉，避免寫到一半當機留下壞掉的 config.json。
+            var tempPath = configPath + ".tmp";
+            File.WriteAllText(tempPath, JsonSerializer.Serialize(next, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(tempPath, configPath, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "[MarketBoardCollector] could not write config.json");
+            return "無法寫入 config.json：" + CollectorStatus.Shorten(ex.Message);
+        }
+
+        config = next;
+        return null;
+    }
+
+    // ---------- 第一次使用的說明 ----------
+
+    private void OnFrameworkUpdate(IFramework updatedFramework)
+    {
+        if (!clientState.IsLoggedIn) return;
+
+        framework.Update -= OnFrameworkUpdate;
+        chatGui.Print("[Market Board Collector] 這個外掛預設會把你在市場板打開的舊染劑等物品資料（掛單與成交紀錄，含雇員名稱與買家名稱）匿名回報給社群伺服器，不含你自己的角色資訊。不想回報：輸入 /mbcollector，取消「啟用上傳」。");
+
+        lock (configLock)
+        {
+            var current = config;
+            PersistConfig(new CollectorConfig { UploadEnabled = current.UploadEnabled, CaptureToFile = current.CaptureToFile, NoticeShown = true }, out _);
+        }
     }
 
     /// <summary>在背景向伺服器重新取得物品清單（給設定視窗的「測試連線」按鈕用）。已在進行中或未啟用上傳時回傳 false。</summary>
@@ -283,6 +340,8 @@ public sealed class Plugin : IDalamudPlugin
         var cached = itemList;
         if (!force && DateTime.UtcNow - cached.FetchedAtUtc < ItemListRefresh && cached.Ids.Count > 0) return cached.Ids;
         var fallback = cached.Ids.Count > 0 ? cached.Ids : null;
+        // 剛失敗過：一段時間內不再敲伺服器（每掃一個物品就試一次會白等 15 秒逾時）
+        if (!force && !itemListGate.CanAttempt(DateTime.UtcNow)) return fallback;
 
         try
         {
@@ -291,7 +350,8 @@ public sealed class Plugin : IDalamudPlugin
             if (!response.IsSuccessStatusCode)
             {
                 log.Warning("[MarketBoardCollector] item list request failed: {Status}", (int)response.StatusCode);
-                status.RecordItemList($"取得物品清單失敗：{DescribeHttpStatus((int)response.StatusCode)}");
+                status.RecordItemList($"取得物品清單失敗：{DescribeHttpStatus((int)response.StatusCode)}（60 秒後再試）");
+                itemListGate.Failed(DateTime.UtcNow);
                 return fallback;
             }
 
@@ -304,6 +364,7 @@ public sealed class Plugin : IDalamudPlugin
                 itemList = new ItemList(ids, DateTime.UtcNow);
             }
 
+            itemListGate.Succeeded();
             log.Information("[MarketBoardCollector] server accepts reports for {Count} items", ids.Count);
             status.RecordItemList($"已取得可上傳物品清單：{ids.Count} 個");
             return ids;
@@ -311,7 +372,8 @@ public sealed class Plugin : IDalamudPlugin
         catch (Exception ex)
         {
             log.Warning("[MarketBoardCollector] could not fetch the item list: {Message}", ex.Message);
-            status.RecordItemList($"取得物品清單失敗：{ex.Message}");
+            status.RecordItemList($"取得物品清單失敗：{ex.Message}（60 秒後再試）");
+            itemListGate.Failed(DateTime.UtcNow);
             return fallback;
         }
     }
@@ -355,6 +417,10 @@ public sealed class Plugin : IDalamudPlugin
                     // 略過這一筆比丟掉整次掃描的其他正常資料好。
                     if (l.PricePerUnit <= 0 || l.ItemQuantity <= 0) continue;
 
+                    var listingId = l.ListingId.ToString();
+                    if (!scan.ListingIds.Add(listingId)) continue; // 同一次掃描裡已經有這筆了
+
+                    scan.ListingKeys.Add($"{listingId}:{l.PricePerUnit}:{l.ItemQuantity}:{l.RetainerName}");
                     scan.Listings.Add(new
                     {
                         pricePerUnit = l.PricePerUnit,
@@ -362,7 +428,7 @@ public sealed class Plugin : IDalamudPlugin
                         hq = l.IsHq,
                         retainerName = l.RetainerName,
                         // 64 位元整數，用字串傳才不會在 JSON 裡失真
-                        listingId = l.ListingId.ToString(),
+                        listingId,
                     });
                 }
 
@@ -393,11 +459,14 @@ public sealed class Plugin : IDalamudPlugin
             {
                 scan.GotHistory = true;
                 scan.Sales.Clear();
+                scan.SaleKeys.Clear();
                 foreach (var s in history.HistoryListings)
                 {
                     // 防禦：理由同掛單那邊——一筆爛資料不該拖累整包上傳。
                     if (s.SalePrice <= 0 || s.Quantity <= 0) continue;
 
+                    var purchasedAtMs = new DateTimeOffset(DateTime.SpecifyKind(s.PurchaseTime, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+                    scan.SaleKeys.Add($"{purchasedAtMs}:{s.SalePrice}:{s.Quantity}:{s.BuyerName}");
                     scan.Sales.Add(new
                     {
                         pricePerUnit = s.SalePrice,
@@ -406,7 +475,7 @@ public sealed class Plugin : IDalamudPlugin
                         // 市場板成交紀錄本來就公開顯示的買家名稱。
                         buyerName = s.BuyerName ?? "",
                         // 封包裡的真實成交時間（UTC）
-                        timestamp = new DateTimeOffset(DateTime.SpecifyKind(s.PurchaseTime, DateTimeKind.Utc)).ToUnixTimeMilliseconds(),
+                        timestamp = purchasedAtMs,
                     });
                 }
 
@@ -444,11 +513,15 @@ public sealed class Plugin : IDalamudPlugin
 
             object[] listings;
             object[] sales;
+            string[] listingKeys;
+            string[] saleKeys;
             bool gotOfferings;
             lock (scan)
             {
                 listings = scan.Listings.ToArray();
                 sales = scan.Sales.ToArray();
+                listingKeys = scan.ListingKeys.ToArray();
+                saleKeys = scan.SaleKeys.ToArray();
                 gotOfferings = scan.GotOfferings;
             }
 
@@ -476,7 +549,15 @@ public sealed class Plugin : IDalamudPlugin
             if (accepted is null) return;
             if (!accepted.Contains(itemId)) return; // Universalis 有資料的物品不用我們回報
 
-            await UploadAsync(cfg, itemId, scan, payload, listings.Length, sales.Length);
+            // 跟最近成功送出的內容完全一樣就不用再送（玩家反覆點同一個物品時）；超過 10 分鐘會再送一次，刷新伺服器的掃描時間。
+            var hash = ScanFingerprint.Compute(scan.WorldId, itemId, listingKeys, saleKeys);
+            if (sent.WasSentRecently(scan.WorldId, itemId, hash, DateTime.UtcNow))
+            {
+                status.RecordSkipped($"item#{itemId}：內容跟 10 分鐘內送過的一樣，略過");
+                return;
+            }
+
+            EnqueueUpload(new UploadJob(itemId, scan.WorldId, JsonSerializer.Serialize(payload), scan.StartedAtMs, listings.Length, sales.Length, hash));
         }
         catch (Exception ex)
         {
@@ -484,51 +565,147 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
-    private async Task UploadAsync(CollectorConfig cfg, uint itemId, Scan scan, object payload, int listingCount, int salesCount)
-    {
-        var body = JsonSerializer.Serialize(payload);
+    // ---------- 上傳佇列：送出、重試、不丟資料 ----------
 
-        await uploadLock.WaitAsync(stop.Token);
+    private readonly record struct SendResult(SendOutcome Outcome, TimeSpan? RetryAfter, string Detail);
+
+    private void EnqueueUpload(UploadJob job)
+    {
+        (EnqueueResult Result, UploadJob? Dropped) queued;
+        lock (queueLock)
+        {
+            queued = queue.Enqueue(job);
+        }
+
+        if (queued.Result == EnqueueResult.QueuedDroppedOldest && queued.Dropped is { } dropped)
+        {
+            log.Warning("[MarketBoardCollector] upload queue is full, dropped the oldest scan (item#{Item})", dropped.ItemId);
+            status.RecordUpload(false, $"item#{dropped.ItemId}：排隊的太多，最舊的一筆被丟棄");
+        }
+
+        StartPump();
+    }
+
+    private void StartPump()
+    {
+        if (Interlocked.CompareExchange(ref pumping, 1, 0) != 0) return;
+        _ = Task.Run(PumpAsync);
+    }
+
+    /// <summary>一次只跑一個：依序送出佇列裡的東西；被限流或暫時失敗就等一下再送同一筆，佇列空了就結束。</summary>
+    private async Task PumpAsync()
+    {
+        var crashed = false;
         try
         {
-            if (DateTime.UtcNow < uploadBackoffUntilUtc)
+            while (!stop.IsCancellationRequested)
             {
-                // 剛被伺服器 429 過，暫停一段時間再試，而不是每次掃描都繼續打（會愈打愈久被限流）。
-                log.Information("[MarketBoardCollector] skip upload for item#{Item}: backing off until {Until:o} after a previous 429", itemId, uploadBackoffUntilUtc);
-                status.RecordUpload(false, $"item#{itemId}：暫停上傳中（剛才被伺服器限流 429，稍後自動恢復）");
-                return;
-            }
+                if (!IsUploadEnabled(config))
+                {
+                    lock (queueLock) queue.Clear();
+                    break;
+                }
 
+                QueueStep step;
+                lock (queueLock) step = queue.Next(DateTime.UtcNow);
+                foreach (var expired in step.Expired)
+                {
+                    status.RecordUpload(false, $"item#{expired.ItemId}：超過 14 分鐘還沒送出去，放棄（伺服器不收太舊的掃描）");
+                }
+
+                if (step.Job is null)
+                {
+                    if (step.Wait is null) break; // 佇列空了
+                    var wait = step.Wait.Value < TimeSpan.FromSeconds(30) ? step.Wait.Value : TimeSpan.FromSeconds(30);
+                    await Task.Delay(wait, stop.Token);
+                    continue;
+                }
+
+                var result = await SendAsync(step.Job);
+                ReportResult report;
+                lock (queueLock) report = queue.Report(step.Job, result.Outcome, result.RetryAfter, DateTime.UtcNow);
+                RecordSendResult(step.Job, result, report);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 外掛正在卸載
+        }
+        catch (Exception ex)
+        {
+            crashed = true;
+            log.Error(ex, "[MarketBoardCollector] upload loop failed");
+        }
+        finally
+        {
+            Volatile.Write(ref pumping, 0);
+            // 迴圈結束到放掉旗標之間，可能又有新的排進來
+            bool more;
+            lock (queueLock) more = queue.Count > 0;
+            if (more && !crashed && !stop.IsCancellationRequested) StartPump();
+        }
+    }
+
+    private async Task<SendResult> SendAsync(UploadJob job)
+    {
+        try
+        {
             using var request = new HttpRequestMessage(HttpMethod.Post, $"{endpoint}/community/upload")
             {
-                Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
+                Content = new StringContent(job.Body, System.Text.Encoding.UTF8, "application/json"),
             };
 
             using var response = await http.SendAsync(request, stop.Token);
             var text = await response.Content.ReadAsStringAsync(stop.Token);
-            if (response.IsSuccessStatusCode)
-            {
-                log.Information("[MarketBoardCollector] uploaded item#{Item} world#{World}: {Listings} listings, {Sales} sales -> {Response}", itemId, scan.WorldId, listingCount, salesCount, text);
-                status.RecordUpload(true, $"item#{itemId} 世界{scan.WorldId}：上傳成功（掛單 {listingCount} 筆、成交 {salesCount} 筆）");
-            }
-            else
-            {
-                if ((int)response.StatusCode == 429)
-                {
-                    uploadBackoffUntilUtc = DateTime.UtcNow + UploadBackoff;
-                }
-                log.Warning("[MarketBoardCollector] upload rejected for item#{Item}: {Status} {Response}", itemId, (int)response.StatusCode, text);
-                status.RecordUpload(false, $"item#{itemId}：被伺服器拒絕（{DescribeHttpStatus((int)response.StatusCode)}）{ServerError(text)}");
-            }
+            var code = (int)response.StatusCode;
+            if (response.IsSuccessStatusCode) return new SendResult(SendOutcome.Success, null, text);
+
+            var detail = $"{DescribeHttpStatus(code)}{ServerError(text)}";
+            if (code == 429) return new SendResult(SendOutcome.RateLimited, response.Headers.RetryAfter?.Delta, detail);
+            if (code >= 500 || code == 408) return new SendResult(SendOutcome.Retryable, null, detail);
+            return new SendResult(SendOutcome.Permanent, null, detail); // 400／413／422／404…：重送也不會成功
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            log.Warning("[MarketBoardCollector] upload failed for item#{Item}: {Message}", itemId, ex.Message);
-            status.RecordUpload(false, $"item#{itemId}：上傳失敗（{ex.Message}）");
+            // 網路錯誤、連不上、逾時（HttpClient 逾時是 TaskCanceledException，但不是我們取消的）
+            return new SendResult(SendOutcome.Retryable, null, ex.Message);
         }
-        finally
+    }
+
+    private void RecordSendResult(UploadJob job, SendResult result, ReportResult report)
+    {
+        var pause = report.PausedFor is { } paused ? $"{Math.Ceiling(paused.TotalSeconds)} 秒" : "";
+        switch (result.Outcome)
         {
-            uploadLock.Release();
+            case SendOutcome.Success:
+                sent.Record(job.WorldId, job.ItemId, job.ContentHash, DateTime.UtcNow);
+                log.Information("[MarketBoardCollector] uploaded item#{Item} world#{World}: {Listings} listings, {Sales} sales -> {Response}", job.ItemId, job.WorldId, job.ListingCount, job.SalesCount, result.Detail);
+                status.RecordUpload(true, $"item#{job.ItemId} 世界{job.WorldId}：上傳成功（掛單 {job.ListingCount} 筆、成交 {job.SalesCount} 筆）");
+                break;
+
+            case SendOutcome.RateLimited:
+                log.Information("[MarketBoardCollector] rate limited on item#{Item}, retrying in {Pause}", job.ItemId, pause);
+                status.RecordPending($"item#{job.ItemId}：伺服器要求慢一點（429），{pause}後自動重送");
+                break;
+
+            case SendOutcome.Retryable when report.GaveUp:
+                log.Warning("[MarketBoardCollector] giving up on item#{Item} after {Attempts} attempts: {Detail}", job.ItemId, job.Attempts, result.Detail);
+                status.RecordUpload(false, $"item#{job.ItemId}：連續失敗，放棄（{result.Detail}）");
+                break;
+
+            case SendOutcome.Retryable:
+                log.Warning("[MarketBoardCollector] upload failed for item#{Item}, retrying in {Pause}: {Detail}", job.ItemId, pause, result.Detail);
+                status.RecordPending($"item#{job.ItemId}：暫時送不出去（{result.Detail}），{pause}後重試");
+                break;
+
+            default:
+                log.Warning("[MarketBoardCollector] upload rejected for item#{Item}: {Detail}", job.ItemId, result.Detail);
+                status.RecordUpload(false, $"item#{job.ItemId}：被伺服器拒絕（{result.Detail}）");
+                break;
         }
     }
 

@@ -13,7 +13,9 @@ public sealed record StatusSnapshot(
     DateTime? UploadMessageAtUtc,
     string ListMessage,
     DateTime? ListMessageAtUtc,
-    bool Refreshing);
+    bool Refreshing,
+    long UploadSkipped,
+    int Queued);
 
 /// <summary>
 /// 本次遊戲階段的上傳統計。背景 Task 寫入、UI 執行緒讀取，所以計數用 Interlocked、訊息用鎖保護。
@@ -26,6 +28,7 @@ public sealed class CollectorStatus
     private readonly object gate = new();
     private long uploadOk;
     private long uploadFailed;
+    private long uploadSkipped;
     private string uploadMessage = "";
     private bool uploadMessageOk;
     private DateTime? uploadAt;
@@ -45,6 +48,29 @@ public sealed class CollectorStatus
         }
     }
 
+    /// <summary>還在重試、尚未成功也尚未放棄：只更新訊息，不算成功或失敗。</summary>
+    public void RecordPending(string message)
+    {
+        lock (gate)
+        {
+            uploadMessage = Shorten(message);
+            uploadMessageOk = false;
+            uploadAt = DateTime.UtcNow;
+        }
+    }
+
+    /// <summary>內容跟最近送過的一樣而略過：不是錯誤，單獨計數。</summary>
+    public void RecordSkipped(string message)
+    {
+        Interlocked.Increment(ref uploadSkipped);
+        lock (gate)
+        {
+            uploadMessage = Shorten(message);
+            uploadMessageOk = true;
+            uploadAt = DateTime.UtcNow;
+        }
+    }
+
     public void RecordItemList(string message)
     {
         lock (gate)
@@ -54,11 +80,11 @@ public sealed class CollectorStatus
         }
     }
 
-    public (long Ok, long Failed, bool UploadMessageOk, string UploadMessage, DateTime? UploadAt, string ListMessage, DateTime? ListAt) Read()
+    public (long Ok, long Failed, long Skipped, bool UploadMessageOk, string UploadMessage, DateTime? UploadAt, string ListMessage, DateTime? ListAt) Read()
     {
         lock (gate)
         {
-            return (Interlocked.Read(ref uploadOk), Interlocked.Read(ref uploadFailed), uploadMessageOk, uploadMessage, uploadAt, listMessage, listAt);
+            return (Interlocked.Read(ref uploadOk), Interlocked.Read(ref uploadFailed), Interlocked.Read(ref uploadSkipped), uploadMessageOk, uploadMessage, uploadAt, listMessage, listAt);
         }
     }
 

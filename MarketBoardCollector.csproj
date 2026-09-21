@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- 測試專案與伺服器不屬於外掛本體，別讓預設的 **/*.cs 把它們編進外掛 -->
+    <Compile Remove="tests/**" />
+    <Compile Remove="server/**" />
+  </ItemGroup>
 </Project>

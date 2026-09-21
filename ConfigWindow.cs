@@ -18,7 +18,7 @@ public sealed class ConfigWindow : Window
     private readonly Plugin plugin;
 
     private bool uploadEnabled = true;
-    private bool captureToFile = true;
+    private bool captureToFile;
     private string feedback = "";
     private bool feedbackIsError;
 
@@ -123,7 +123,7 @@ public sealed class ConfigWindow : Window
             ImGui.TextWrapped($"　清單最近一次結果 [{listAt.ToLocalTime():HH:mm:ss}]：{s.ListMessage}");
         }
 
-        ImGui.Text($"本次遊戲階段上傳：成功 {s.UploadOk} 筆、失敗 {s.UploadFailed} 筆");
+        ImGui.Text($"本次遊戲階段上傳：成功 {s.UploadOk} 筆、失敗 {s.UploadFailed} 筆、內容沒變略過 {s.UploadSkipped} 筆；等待送出／重試 {s.Queued} 筆");
         if (s.UploadMessage.Length > 0 && s.UploadMessageAtUtc is { } uploadAt)
         {
             ImGui.TextColored(s.UploadMessageOk ? Green : Red, $"最近一次上傳 [{uploadAt.ToLocalTime():HH:mm:ss}]：{s.UploadMessage}");

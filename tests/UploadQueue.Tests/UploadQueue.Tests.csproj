@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>MarketBoardCollector.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 直接編入外掛的純邏輯檔案（不依賴 Dalamud），在遊戲外驗證 -->
+    <Compile Include="..\..\UploadQueue.cs" Link="UploadQueue.cs" />
+  </ItemGroup>
+</Project>

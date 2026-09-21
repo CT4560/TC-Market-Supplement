@@ -35,8 +35,8 @@ function describeSkipped(skipped: Record<string, number>): string {
   return parts.length > 0 ? " skipped(" + parts.join(",") + ")" : "";
 }
 
-function sendJson(res: http.ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+function sendJson(res: http.ServerResponse, status: number, body: unknown, extraHeaders: Record<string, string> = {}): void {
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...extraHeaders });
   res.end(JSON.stringify(body));
 }
 
@@ -132,7 +132,8 @@ export function createApp(options: AppOptions): http.Server {
 
       if (req.method === "POST" && url.pathname === "/community/upload") {
         if (!rateLimiter.allow(clientIp)) {
-          sendJson(res, 429, { ok: false, error: "too many uploads" });
+          // 上傳限流是「每個 IP 每 250ms 一次」，等 1 秒一定夠；外掛會照這個時間等再重送。
+          sendJson(res, 429, { ok: false, error: "too many uploads" }, { "retry-after": "1" });
           return;
         }
 
