@@ -1,7 +1,7 @@
 import { TW_WORLDS } from "./worlds.js";
 import { SALES_RETENTION_MS, type CollectorStore, type StoredListing, type StoredSale } from "./store.js";
 
-// 接收外掛上傳的掛單與成交。上傳公開匿名，靠三道檢查擋濫用：
+// 接收插件上傳的掛單與成交。上傳公開匿名，靠三道檢查擋濫用：
 // 物品白名單（data/items.json）、逐項資料檢查、依來源 IP 限流。
 /** COMMUNITY_UPLOAD_ENABLED=on 才開放上傳端點。 */
 export function isCommunityUploadEnabled(env: NodeJS.ProcessEnv = process.env): boolean {

@@ -66,7 +66,7 @@ Write-Host "產出：$($item.FullName)"
 Write-Host "大小：$($item.Length) bytes"
 Write-Host "SHA256：$hash"
 Write-Host "內容：$($names -join ', ')"
-Write-Host "外掛版本 (AssemblyVersion)：$($manifest.AssemblyVersion)，DalamudApiLevel：$($manifest.DalamudApiLevel)"
+Write-Host "插件版本 (AssemblyVersion)：$($manifest.AssemblyVersion)，DalamudApiLevel：$($manifest.DalamudApiLevel)"
 
 # repo.json 範本裡的版本要和這次打包的一致，否則 Dalamud 不會判定有更新
 $repoPath = Join-Path $projectDir 'repo.json'

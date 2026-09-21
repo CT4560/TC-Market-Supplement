@@ -2,7 +2,7 @@
 
 ## 專案結構
 
-- `Plugin.cs`：外掛主體。收市場板封包、合併成一次掃描、上傳。
+- `Plugin.cs`：插件主體。收市場板封包、合併成一次掃描、上傳。
 - `UploadQueue.cs`：上傳佇列、重試退避、內容去重。不依賴 Dalamud。
 - `ConfigWindow.cs`、`CollectorStatus.cs`、`CollectorConfig.cs`：設定視窗、狀態統計、設定檔。
 - `tests/UploadQueue.Tests`：`UploadQueue.cs` 的測試。
@@ -11,7 +11,7 @@
 ## 掃描與上傳
 
 - 遊戲把掛單分成多個封包送來，最後沒有結束標記，所以一個物品安靜 2 秒就算一次掃描結束。
-- 沒人在賣的物品只有成交紀錄的封包，外掛把這種情況當成目前沒有掛單。
+- 沒人在賣的物品只有成交紀錄的封包，插件把這種情況當成目前沒有掛單。
 - 上傳前先向伺服器取物品清單（`GET /community/items`，約 30 分鐘更新一次），只回報清單內的物品。
 - 掛單最多 100 筆、成交最多 50 筆，價格或數量不合法的項目在上傳前就略過，避免整包被伺服器拒絕。
 - 上傳排在佇列裡。被限流（429）依 `Retry-After` 等待，網路錯誤與 5xx 依 5、15、45、135 秒退避，重試 5 次仍失敗、或超過 14 分鐘（伺服器不收更舊的掃描）就放棄。伺服器明確拒絕的不重送。
@@ -26,7 +26,7 @@ $env:DALAMUD_HOME = 'C:\Users\<你>\AppData\Roaming\FFXIVSimpleLauncher\Dalamud\
 dotnet build -c Release
 ```
 
-輸出在 `bin\Release\`。遊戲執行中不要建置到這裡，可能鎖檔或讓執行中的外掛被換掉；要在遊戲開著時驗證編譯，加 `-o` 輸出到別的資料夾。
+輸出在 `bin\Release\`。遊戲執行中不要建置到這裡，可能鎖檔或讓執行中的插件被換掉；要在遊戲開著時驗證編譯，加 `-o` 輸出到別的資料夾。
 
 ## 打包
 
@@ -34,7 +34,7 @@ dotnet build -c Release
 powershell -NoProfile -File .\pack.ps1
 ```
 
-輸出 `dist\latest.zip`（含 DLL 與 manifest）。`repo.json` 是自訂儲存庫的範本，下載連結與 `RepoUrl` 還是佔位字串，發佈時填入，並確認 `AssemblyVersion` 與這次打包的版本一致。外掛沒有簽章，目前也沒有發佈到任何地方。
+輸出 `dist\latest.zip`（含 DLL 與 manifest）。`repo.json` 是自訂儲存庫的範本，下載連結與 `RepoUrl` 還是佔位字串，發佈時填入，並確認 `AssemblyVersion` 與這次打包的版本一致。插件沒有簽章，目前也沒有發佈到任何地方。
 
 ## 測試
 
@@ -47,7 +47,7 @@ dotnet run
 
 ## 指向本機伺服器測試
 
-啟動遊戲前設定環境變數 `MBCOLLECTOR_ENDPOINT`，外掛就改用這個網址上傳，不出現在設定視窗：
+啟動遊戲前設定環境變數 `MBCOLLECTOR_ENDPOINT`，插件就改用這個網址上傳，不出現在設定視窗：
 
 ```powershell
 $env:MBCOLLECTOR_ENDPOINT = 'http://127.0.0.1:8787'
@@ -58,6 +58,6 @@ $env:MBCOLLECTOR_ENDPOINT = 'http://127.0.0.1:8787'
 
 ## 已知限制
 
-- 拿不到每筆掛單真正的上架時間（Dalamud 的 `LastReviewTime` 沒有被填值），所以外掛不送這個欄位，伺服器用第一次看到這筆掛單的時間代替。
+- 拿不到每筆掛單真正的上架時間（Dalamud 的 `LastReviewTime` 沒有被填值），所以插件不送這個欄位，伺服器用第一次看到這筆掛單的時間代替。
 - 完全沒有掛單也沒有成交紀錄的物品，遊戲不會送任何封包，所以不會有回報。
-- 外掛只讀你目前所在的世界；要回報其他世界，要到那個世界的市場板查看。
+- 插件只讀你目前所在的世界；要回報其他世界，要到那個世界的市場板查看。

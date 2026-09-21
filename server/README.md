@@ -1,11 +1,11 @@
 # 社群回報伺服器
 
-接收 Market Board Collector 外掛的匿名上傳，存進自己的 SQLite 資料庫，並提供公開、免金鑰的 REST API 與 WebSocket 即時推播（相容 Universalis v2，時間用 UTC 毫秒）。完全獨立：不依賴任何其他專案的程式碼或資料庫。
+接收 Market Board Collector 插件的匿名上傳，存進自己的 SQLite 資料庫，並提供公開、免金鑰的 REST API 與 WebSocket 即時推播（相容 Universalis v2，時間用 UTC 毫秒）。完全獨立：不依賴任何其他專案的程式碼或資料庫。
 
 ## 做什麼
 
-- `POST /community/upload`：外掛上傳一次市場板掃描（該物品目前的掛單與最近成交）。公開匿名，不需要金鑰。
-- `GET /community/items`：告訴外掛哪些物品、哪些世界接受回報（外掛啟動時問，約每 30 分鐘更新）。
+- `POST /community/upload`：插件上傳一次市場板掃描（該物品目前的掛單與最近成交）。公開匿名，不需要金鑰。
+- `GET /community/items`：告訴插件哪些物品、哪些世界接受回報（插件啟動時問，約每 30 分鐘更新）。
 - `GET /api/v2/…`：公開讀取 API（見下方「公開 API」）。
 - `wss://…/api/ws`：即時推播（見下方「WebSocket」）。
 - `GET /docs/`：給開發者的文件與測試網站 TC-Market Supplement（見下方「文件網站」）。
@@ -13,7 +13,7 @@
 
 ## 公開 API（`/api/v2`）
 
-路徑、查詢參數與回應欄位跟 [Universalis v2](https://docs.universalis.app/) 相同，現有的 Universalis 用戶端改一下網址就能用；資料是玩家用外掛回報的社群資料，不是即時的（`lastUploadTime` 是最近一次有人掃描的時間）。全部端點都是 `GET`，回 JSON，允許任何來源的瀏覽器跨網域呼叫（`Access-Control-Allow-Origin: *`）。
+路徑、查詢參數與回應欄位跟 [Universalis v2](https://docs.universalis.app/) 相同，現有的 Universalis 用戶端改一下網址就能用；資料是玩家用插件回報的社群資料，不是即時的（`lastUploadTime` 是最近一次有人掃描的時間）。全部端點都是 `GET`，回 JSON，允許任何來源的瀏覽器跨網域呼叫（`Access-Control-Allow-Origin: *`）。
 
 | 端點 | 說明 |
 | --- | --- |
@@ -35,7 +35,7 @@ curl "https://api-ffxiv-bot.epicurean-expedition.com/api/v2/陸行鳥/5729,5730?
 
 ### 資料的性質
 
-這裡的資料完全來自玩家順便在市場板查價時，外掛被動回報的結果，沒有人被要求去掃描，也沒有任何程式會主動抓取。所以：
+這裡的資料完全來自玩家順便在市場板查價時，插件被動回報的結果，沒有人被要求去掃描，也沒有任何程式會主動抓取。所以：
 
 - 有些物品可能一直沒有人查過：回應的 `hasData` 是 `false`、`lastUploadTime` 是 0，掛單與成交都是空的。這代表「沒有人回報過」，不代表「沒有人在賣」。
 - 每個物品、每個世界的資料新舊不一，請用 `lastUploadTime`（該世界最近一次被掃描的時間，UTC 毫秒）判斷要不要採用；資料中心版另有 `worldUploadTimes` 分世界。

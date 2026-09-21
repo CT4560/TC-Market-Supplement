@@ -7,7 +7,7 @@
     <RootNamespace>MarketBoardCollector.Tests</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <!-- 直接編入外掛的純邏輯檔案（不依賴 Dalamud），在遊戲外驗證 -->
+    <!-- 直接編入插件的純邏輯檔案（不依賴 Dalamud），在遊戲外驗證 -->
     <Compile Include="..\..\UploadQueue.cs" Link="UploadQueue.cs" />
   </ItemGroup>
 </Project>

@@ -48,7 +48,7 @@ public sealed class ConfigWindow : Window
 
     private void DrawSettings()
     {
-        ImGui.TextWrapped("本外掛只被動記錄你自己在市場板打開的物品，不會操作遊戲。預設會把 Universalis 沒有資料的物品（例如繁中服舊染劑）的掛單與成交紀錄回報給社群伺服器，只送市場板上公開顯示的資料（含成交紀錄的買家名稱與雇員名稱），不含你自己的角色資訊。關閉「啟用上傳」就只寫本機檔案、不會上傳。");
+        ImGui.TextWrapped("本插件只被動記錄你自己在市場板打開的物品，不會操作遊戲。預設會把 Universalis 沒有資料的物品（例如繁中服舊染劑）的掛單與成交紀錄回報給社群伺服器，只送市場板上公開顯示的資料（含成交紀錄的買家名稱與雇員名稱），不含你自己的角色資訊。關閉「啟用上傳」就只寫本機檔案、不會上傳。");
         ImGui.Spacing();
 
         ImGui.Checkbox("啟用上傳（回報給社群伺服器）", ref uploadEnabled);

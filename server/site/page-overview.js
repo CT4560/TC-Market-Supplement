@@ -39,7 +39,7 @@ export async function overviewPage({ config, items, origin }) {
         null,
         h("h1", { text: "TC-Market Supplement" }),
         h("p", { text: "繁中服市場補充資料" }),
-        h("p", { text: "繁中服上 Universalis 沒有價格資料的物品（主要是舊染劑與色素），由玩家使用外掛在市場板查價時順便回報。這裡提供公開、免金鑰的 REST API 與 WebSocket，格式與 Universalis v2 相容，時間一律是 UTC 毫秒。" }),
+        h("p", { text: "繁中服上 Universalis 沒有價格資料的物品（主要是舊染劑與色素），由玩家使用插件在市場板查價時順便回報。這裡提供公開、免金鑰的 REST API 與 WebSocket，格式與 Universalis v2 相容，時間一律是 UTC 毫秒。" }),
         h(
           "div",
           { class: "button-row" },

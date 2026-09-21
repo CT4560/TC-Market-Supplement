@@ -246,7 +246,7 @@ public sealed class Plugin : IDalamudPlugin
         if (!clientState.IsLoggedIn) return;
 
         framework.Update -= OnFrameworkUpdate;
-        chatGui.Print("[Market Board Collector] 這個外掛預設會把你在市場板打開的舊染劑等物品資料（掛單與成交紀錄，含雇員名稱與買家名稱）匿名回報給社群伺服器，不含你自己的角色資訊。不想回報：輸入 /mbcollector，取消「啟用上傳」。");
+        chatGui.Print("[Market Board Collector] 這個插件預設會把你在市場板打開的舊染劑等物品資料（掛單與成交紀錄，含雇員名稱與買家名稱）匿名回報給社群伺服器，不含你自己的角色資訊。不想回報：輸入 /mbcollector，取消「啟用上傳」。");
 
         lock (configLock)
         {
@@ -598,7 +598,7 @@ public sealed class Plugin : IDalamudPlugin
         }
         catch (OperationCanceledException)
         {
-            // 外掛正在卸載
+            // 插件正在卸載
         }
         catch (Exception ex)
         {

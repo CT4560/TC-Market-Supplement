@@ -99,7 +99,7 @@ describe("HTTP 端點", () => {
     assert.equal((await post(sameIp, "{not json")).status, 400, "第一次通過限流（之後才被資料檢查擋下）");
     const limited = await post(sameIp, "{not json");
     assert.equal(limited.status, 429);
-    assert.equal(limited.headers.get("retry-after"), "1", "告訴外掛等多久再送");
+    assert.equal(limited.headers.get("retry-after"), "1", "告訴插件等多久再送");
     assert.equal((await post(fromNewIp(), "{not json")).status, 400);
   });
 

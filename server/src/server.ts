@@ -138,7 +138,7 @@ export function createApp(options: AppOptions): http.Server {
 
       if (req.method === "POST" && url.pathname === "/community/upload") {
         if (!rateLimiter.allow(clientIp)) {
-          // 告訴外掛等 1 秒再送
+          // 告訴插件等 1 秒再送
           sendJson(res, 429, { ok: false, error: "too many uploads" }, { "retry-after": "1" });
           return;
         }
