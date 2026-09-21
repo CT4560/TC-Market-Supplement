@@ -191,7 +191,7 @@ describe("寫入資料庫", () => {
     rawDb.prepare("DELETE FROM snapshot").run();
   });
 
-  test("掛單整份取代、依價格排序、最多留 10 筆，上傳時間與每筆第一次看到的時間都保留", () => {
+  test("掛單整份取代、依價格排序、整份都存（不再只留最低價 10 筆），上傳時間與每筆第一次看到的時間都保留", () => {
     const now = Date.now();
     const listings = Array.from({ length: 12 }, (_, i) => ({ pricePerUnit: 1000 - i * 10, quantity: 1, retainerName: "R", listingId: String(8000 + i) }));
     const checked = validateUpload(upload({ capturedAt: now - 1000, listings, sales: [] }), { ...ctx, now });
@@ -200,13 +200,59 @@ describe("寫入資料庫", () => {
     const applied = applyUpload(store, checked.value, now);
     const entry = store.getEntry(W, ITEM)!;
 
-    assert.equal(applied.listingsStored, 10);
-    assert.equal(entry.listings.length, 10);
+    assert.equal(applied.listingsStored, 12);
+    assert.equal(entry.listings.length, 12);
     assert.equal(entry.listings[0].pricePerUnit, 890);
     assert.equal(entry.listings[0].total, 890);
     assert.equal(entry.uploadedAt, now - 1000);
     assert.equal(entry.listings[0].firstSeenAt, now - 1000);
     assert.equal(entry.listings[0].listingId, "8011");
+  });
+
+  test("上傳造成的變動：新掛單、消失的掛單、真的新增的成交；內容沒變就沒有變動", () => {
+    const base = Date.now();
+    const scan = (offset: number, ids: string[], sales: Array<{ pricePerUnit: number; quantity: number; timestamp: number; buyerName: string }>) => {
+      const capturedAt = base + offset;
+      const checked = validateUpload(
+        upload({ capturedAt, listings: ids.map((id, i) => ({ pricePerUnit: 100 + i, quantity: 1, retainerName: "R", listingId: id })), sales }),
+        { ...ctx, now: capturedAt + 500 },
+      );
+      assert.ok(checked.ok);
+      return applyUpload(store, checked.value, capturedAt + 500).changes;
+    };
+    const sale = { pricePerUnit: 50, quantity: 2, timestamp: base - 3_600_000, buyerName: "買家甲" };
+
+    const first = scan(0, ["1", "2"], [sale]);
+    assert.deepEqual(first.addedListings.map((l) => l.listingId).sort(), ["1", "2"]);
+    assert.deepEqual(first.removedListings, []);
+    assert.equal(first.newSales.length, 1);
+
+    const second = scan(1000, ["2", "3"], [sale]); // 1 賣掉了、3 是新的、同一筆成交不再算新增
+    assert.deepEqual(second.addedListings.map((l) => l.listingId), ["3"]);
+    assert.deepEqual(second.removedListings.map((l) => l.listingId), ["1"]);
+    assert.deepEqual(second.newSales, []);
+
+    const third = scan(2000, ["2", "3"], []); // 完全沒變
+    assert.deepEqual([third.addedListings, third.removedListings, third.newSales], [[], [], []]);
+  });
+
+  test("沒帶掛單編號的掛單用「價格＋數量＋雇員」比對變動；較舊的擷取被忽略時沒有變動", () => {
+    const base = Date.now();
+    const put = (offset: number, price: number) => {
+      const capturedAt = base + offset;
+      const checked = validateUpload(upload({ capturedAt, listings: [{ pricePerUnit: price, quantity: 3, retainerName: "R" }], sales: [] }), { ...ctx, now: base + 5000 });
+      assert.ok(checked.ok);
+      return applyUpload(store, checked.value, base + 5000);
+    };
+    assert.equal(put(1000, 100).changes.addedListings.length, 1);
+    assert.equal(put(2000, 100).changes.addedListings.length, 0, "內容一樣");
+    const changed = put(3000, 120).changes;
+    assert.equal(changed.addedListings.length, 1);
+    assert.equal(changed.removedListings.length, 1);
+
+    const stale = put(500, 999); // 比已存的擷取舊
+    assert.equal(stale.listingsIgnored, true);
+    assert.deepEqual([stale.changes.addedListings, stale.changes.removedListings], [[], []]);
   });
 
   test("同一筆掛單（同編號）再次被掃描到：第一次看到的時間不變；新的編號用這次掃描時間", () => {

@@ -47,8 +47,8 @@ export const MAX_QUANTITY = 99;
 const MAX_CAPTURE_AGE_MS = 15 * 60_000;
 const MAX_CAPTURE_FUTURE_MS = 2 * 60_000;
 const SALES_RETENTION_MS = 30 * 86_400_000;
-/** 資料庫每個世界每個物品只留最低價的前幾筆，跟其他資料來源一致。 */
-const STORED_LISTINGS_LIMIT = 10;
+/** 每個世界每個物品存整份掛單（上限同單次上傳）：統計與資料中心合併都需要完整清單。 */
+const STORED_LISTINGS_LIMIT = MAX_LISTINGS_PER_UPLOAD;
 /** 雇員名稱的長度上限（遊戲內雇員名稱遠短於這個數字）。 */
 const MAX_NAME_LENGTH = 40;
 /** 買家（角色）名稱：繁中服的姓與名加起來最多 6 個字（不含中間的空白）。 */
@@ -173,11 +173,29 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
   return { ok: true, value: { worldId: input.worldId, itemId: input.itemId, capturedAt, listings, sales, skipped } };
 }
 
+/** 這次上傳造成的變動，給即時推播用（不是上傳者要看的內容）。 */
+export interface UploadChanges {
+  worldId: number;
+  itemId: number;
+  /** 新出現的掛單（以掛單編號比對；沒有編號的用價格＋數量＋雇員）。 */
+  addedListings: StoredListing[];
+  /** 這次掃描已經不在的掛單。 */
+  removedListings: StoredListing[];
+  /** 真的新寫入的成交。 */
+  newSales: StoredSale[];
+}
+
 export interface ApplyResult {
   listingsStored: number;
   salesInserted: number;
   /** 已經有比這次擷取更新的掛單資料（別的上傳者、或這份上傳是延遲送達的舊資料），這次的掛單沒有寫入。 */
   listingsIgnored?: boolean;
+  changes: UploadChanges;
+}
+
+/** 比對新舊掛單用的鍵：有掛單編號就用編號，否則用內容。 */
+export function listingKey(listing: StoredListing): string {
+  return listing.listingId ? "id:" + listing.listingId : ["c", listing.pricePerUnit, listing.quantity, listing.retainerName].join("|");
 }
 
 /**
@@ -215,6 +233,16 @@ export function applyUpload(store: CollectorStore, upload: NormalizedUpload, now
 
   if (!listingsIgnored) store.setEntry(upload.worldId, upload.itemId, stored, upload.capturedAt);
 
+  // 新舊掛單的差異（較舊的擷取被忽略時沒有變動）。
+  let addedListings: StoredListing[] = [];
+  let removedListings: StoredListing[] = [];
+  if (!listingsIgnored) {
+    const before = new Set((existing?.listings ?? []).map(listingKey));
+    const after = new Set(stored.map(listingKey));
+    addedListings = stored.filter((listing) => !before.has(listingKey(listing)));
+    removedListings = (existing?.listings ?? []).filter((listing) => !after.has(listingKey(listing)));
+  }
+
   const sales: StoredSale[] = upload.sales.map((sale) => ({
     pricePerUnit: sale.pricePerUnit,
     quantity: sale.quantity,
@@ -222,9 +250,13 @@ export function applyUpload(store: CollectorStore, upload: NormalizedUpload, now
     saleTimestamp: sale.timestamp,
   }));
   // 重複上傳會被唯一索引擋掉（買家名稱也是索引的一部分，沒有名稱存空字串）。
-  const salesInserted = sales.length > 0 ? store.insertSales(upload.worldId, upload.itemId, sales, now, now) : 0;
+  const newSales = sales.length > 0 ? store.insertSales(upload.worldId, upload.itemId, sales, now, now) : [];
+  const salesInserted = newSales.length;
+  const changes: UploadChanges = { worldId: upload.worldId, itemId: upload.itemId, addedListings, removedListings, newSales };
 
-  return listingsIgnored ? { listingsStored: 0, salesInserted, listingsIgnored } : { listingsStored: stored.length, salesInserted };
+  return listingsIgnored
+    ? { listingsStored: 0, salesInserted, listingsIgnored, changes }
+    : { listingsStored: stored.length, salesInserted, changes };
 }
 
 /**

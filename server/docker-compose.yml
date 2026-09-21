@@ -15,6 +15,8 @@ services:
     environment:
       # 上傳端點的總開關；這個服務的用途就是收上傳，所以容器裡打開。
       COMMUNITY_UPLOAD_ENABLED: "on"
+      # 公開讀取 API（/api/v2）與 WebSocket（/api/ws）的總開關。
+      COMMUNITY_API_ENABLED: "on"
     ports:
       # 主機端的埠可用環境變數 COLLECTOR_PORT 改（同一台機器上 8787 已被別的服務佔用時，例如在 .env 寫 COLLECTOR_PORT=8788）。
       - "127.0.0.1:${COLLECTOR_PORT:-8787}:8787"
@@ -29,7 +31,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    mem_limit: 256m
+    mem_limit: 384m
 
 volumes:
   collector-data:

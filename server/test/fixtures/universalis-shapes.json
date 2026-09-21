@@ -1,0 +1,15 @@
+{
+  "_comment": "2026-09-21 對 universalis.app/api/v2 的真實回應取得的欄位名稱與順序（只有鍵，沒有資料）。相容性測試用它確認我們的回應跟 Universalis 的鍵集合與順序一致。",
+  "worldItem": ["itemID", "worldID", "lastUploadTime", "listings", "recentHistory", "currentAveragePrice", "currentAveragePriceNQ", "currentAveragePriceHQ", "regularSaleVelocity", "nqSaleVelocity", "hqSaleVelocity", "averagePrice", "averagePriceNQ", "averagePriceHQ", "minPrice", "minPriceNQ", "minPriceHQ", "maxPrice", "maxPriceNQ", "maxPriceHQ", "stackSizeHistogram", "stackSizeHistogramNQ", "stackSizeHistogramHQ", "worldName", "listingsCount", "recentHistoryCount", "unitsForSale", "unitsSold", "hasData"],
+  "listing": ["lastReviewTime", "pricePerUnit", "quantity", "stainID", "creatorName", "creatorID", "hq", "isCrafted", "listingID", "materia", "onMannequin", "retainerCity", "retainerID", "retainerName", "sellerID", "total", "tax"],
+  "recentHistory": ["hq", "pricePerUnit", "quantity", "timestamp", "onMannequin", "buyerName", "total"],
+  "multi": ["itemIDs", "items", "worldID", "unresolvedItems", "worldName"],
+  "history": ["itemID", "worldID", "lastUploadTime", "entries", "stackSizeHistogram", "stackSizeHistogramNQ", "stackSizeHistogramHQ", "regularSaleVelocity", "nqSaleVelocity", "hqSaleVelocity", "worldName"],
+  "historyEntry": ["hq", "pricePerUnit", "quantity", "buyerName", "onMannequin", "timestamp"],
+  "dcItem": ["itemID", "lastUploadTime", "listings", "recentHistory", "dcName", "currentAveragePrice", "currentAveragePriceNQ", "currentAveragePriceHQ", "regularSaleVelocity", "nqSaleVelocity", "hqSaleVelocity", "averagePrice", "averagePriceNQ", "averagePriceHQ", "minPrice", "minPriceNQ", "minPriceHQ", "maxPrice", "maxPriceNQ", "maxPriceHQ", "stackSizeHistogram", "stackSizeHistogramNQ", "stackSizeHistogramHQ", "worldUploadTimes", "listingsCount", "recentHistoryCount", "unitsForSale", "unitsSold", "hasData"],
+  "dcListing": ["lastReviewTime", "pricePerUnit", "quantity", "stainID", "worldName", "worldID", "creatorName", "creatorID", "hq", "isCrafted", "listingID", "materia", "onMannequin", "retainerCity", "retainerID", "retainerName", "sellerID", "total", "tax"],
+  "dcRecentHistory": ["hq", "pricePerUnit", "quantity", "timestamp", "onMannequin", "worldName", "worldID", "buyerName", "total"],
+  "mostRecentItem": ["itemID", "lastUploadTime", "worldID", "worldName"],
+  "world": ["id", "name"],
+  "dataCenter": ["name", "region", "worlds"]
+}

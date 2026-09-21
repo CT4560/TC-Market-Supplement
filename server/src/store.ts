@@ -30,6 +30,13 @@ export interface StoredSale {
   saleTimestamp: number;
 }
 
+/** 最近一次被回報的物品（給 most-recently-updated 用）。 */
+export interface RecentUpdate {
+  worldId: number;
+  itemId: number;
+  uploadedAt: number;
+}
+
 export interface CollectorItem {
   id: number;
   name: string;
@@ -53,6 +60,16 @@ function prepareStatements(db: Database.Database) {
     hasItem: db.prepare(`SELECT 1 FROM items WHERE id = ?`),
     deleteItems: db.prepare(`DELETE FROM items`),
     insertItem: db.prepare(`INSERT INTO items (id, name, name_en) VALUES (@id, @name, @nameEn)`),
+    getSales: db.prepare(`
+      SELECT pricePerUnit, quantity, buyerName, saleTimestamp FROM sales
+      WHERE worldId = ? AND itemId = ? AND saleTimestamp >= ?
+      ORDER BY saleTimestamp DESC, id DESC LIMIT ?
+    `),
+    mostRecent: db.prepare(`
+      SELECT worldId, itemId, uploadedAt FROM snapshot
+      WHERE (? IS NULL OR worldId = ?)
+      ORDER BY uploadedAt DESC LIMIT ?
+    `),
   };
 }
 
@@ -141,18 +158,32 @@ export class CollectorStore {
 
   // ---------- 成交 ----------
 
-  /** 一批成交包成一個交易寫入；回傳實際新增筆數（重複的會被唯一索引擋掉，超過保留期的略過）。 */
-  insertSales = (worldId: number, itemId: number, sales: StoredSale[], capturedAt: number, now: number = Date.now()): number => {
-    return this.db.transaction((): number => {
-      let inserted = 0;
+  /**
+   * 一批成交包成一個交易寫入；回傳「真的新增」的那幾筆（重複的會被唯一索引擋掉，超過保留期的略過）。
+   * 呼叫端拿它當即時推播的內容，所以只能回真的寫進去的。
+   */
+  insertSales = (worldId: number, itemId: number, sales: StoredSale[], capturedAt: number, now: number = Date.now()): StoredSale[] => {
+    return this.db.transaction((): StoredSale[] => {
+      const inserted: StoredSale[] = [];
       const oldestKept = now - SALES_RETENTION_MS;
       for (const sale of sales) {
         if (sale.saleTimestamp < oldestKept) continue;
-        inserted += this.stmts.insertSale.run({ worldId, itemId, ...sale, capturedAt }).changes;
+        if (this.stmts.insertSale.run({ worldId, itemId, ...sale, capturedAt }).changes > 0) inserted.push(sale);
       }
       return inserted;
     })();
   };
+
+  /** 某世界某物品的成交，新到舊；sinceMs 以前的不回（毫秒時間戳記）。 */
+  getSales(worldId: number, itemId: number, options: { sinceMs?: number; limit?: number } = {}): StoredSale[] {
+    const rows = this.stmts.getSales.all(worldId, itemId, options.sinceMs ?? 0, options.limit ?? 1800) as StoredSale[];
+    return rows;
+  }
+
+  /** 最近被回報的物品，新到舊；worldId 給了就只看那個世界。 */
+  mostRecentlyUpdated(worldId: number | null, limit: number): RecentUpdate[] {
+    return this.stmts.mostRecent.all(worldId, worldId, limit) as RecentUpdate[];
+  }
 
   pruneOldSales(now: number = Date.now()): number {
     return this.stmts.deleteOldSales.run(now - SALES_RETENTION_MS).changes;

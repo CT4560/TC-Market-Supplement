@@ -9,11 +9,21 @@ import {
   validateUpload,
 } from "./community.js";
 import type { CollectorStore } from "./store.js";
+import { TokenBucketLimiter } from "./rate-limit.js";
+import { handleApiV2, isApiV2Path, isCommunityApiEnabled } from "./api-v2.js";
+import { WS_PATH, WsHub } from "./ws-hub.js";
+
+/** 公開讀取 API 每個來源 IP 的限流：每秒 20 次、突發 40（Universalis 是 25／50）。 */
+export const API_RATE_PER_SECOND = 20;
+export const API_RATE_BURST = 40;
 
 export interface AppOptions {
   store: CollectorStore;
   /** 測試用：換成假時鐘的限流器。 */
   rateLimiter?: UploadRateLimiter;
+  apiLimiter?: TokenBucketLimiter;
+  /** 測試用：換成自訂上限的推播中心。 */
+  hub?: WsHub;
   env?: NodeJS.ProcessEnv;
   now?: () => number;
   log?: (message: string) => void;
@@ -77,8 +87,10 @@ export function createApp(options: AppOptions): http.Server {
   const now = options.now ?? Date.now;
   const log = options.log ?? ((message: string) => console.log(message));
   const rateLimiter = options.rateLimiter ?? new UploadRateLimiter();
+  const apiLimiter = options.apiLimiter ?? new TokenBucketLimiter(API_RATE_PER_SECOND, API_RATE_BURST);
+  const hub = options.hub ?? new WsHub();
 
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? "/", "http://localhost");
 
@@ -89,6 +101,15 @@ export function createApp(options: AppOptions): http.Server {
         } catch {
           sendJson(res, 503, { ok: false, error: "database unavailable" });
         }
+        return;
+      }
+
+      if (isApiV2Path(url.pathname)) {
+        if (!isCommunityApiEnabled(env)) {
+          sendJson(res, 404, { ok: false, error: "not found" });
+          return;
+        }
+        handleApiV2(req, res, url, getClientIp(req), { store, limiter: apiLimiter, now });
         return;
       }
 
@@ -152,7 +173,14 @@ export function createApp(options: AppOptions): http.Server {
         log(
           `[community] ${clientIp}: world=${checked.value.worldId} item=${checked.value.itemId} listings=${applied.listingsStored}${applied.listingsIgnored ? "(older than stored, ignored)" : ""} salesAdded=${applied.salesInserted}${describeSkipped(checked.value.skipped)}`,
         );
-        sendJson(res, 200, { ok: true, ...applied });
+        // changes 是給即時推播用的內部資料，不回給上傳者。
+        const { changes, ...uploadResult } = applied;
+        try {
+          hub.publish(changes);
+        } catch (error) {
+          log(`[ws] publish failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        sendJson(res, 200, { ok: true, ...uploadResult });
         return;
       }
 
@@ -162,4 +190,24 @@ export function createApp(options: AppOptions): http.Server {
       if (!res.headersSent) sendJson(res, 500, { ok: false, error: "internal error" });
     }
   });
+
+  // 即時推播的 WebSocket：只有 /api/ws，且要 COMMUNITY_API_ENABLED=on。
+  server.on("upgrade", (req, socket, head) => {
+    const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+    if (pathname !== WS_PATH || !isCommunityApiEnabled(env)) {
+      socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+    hub.handleUpgrade(req, socket, head, getClientIp(req));
+  });
+  // 升級後的 WebSocket 連線不會被 http.Server 當成一般連線，server.close() 會一直等它們自己離開；
+  // 所以關閉伺服器時先把推播中心（含所有連線）關掉，優雅關機（SIGTERM）才不會卡住。
+  const closeServer = server.close.bind(server);
+  server.close = (callback?: (error?: Error) => void) => {
+    hub.close();
+    return closeServer(callback);
+  };
+
+  return server;
 }
