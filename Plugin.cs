@@ -402,6 +402,8 @@ public sealed class Plugin : IDalamudPlugin
                         pricePerUnit = s.SalePrice,
                         quantity = s.Quantity,
                         hq = s.IsHq,
+                        // 市場板成交紀錄本來就公開顯示的買家名稱。
+                        buyerName = s.BuyerName ?? "",
                         // 封包裡的真實成交時間（UTC）
                         timestamp = new DateTimeOffset(DateTime.SpecifyKind(s.PurchaseTime, DateTimeKind.Utc)).ToUnixTimeMilliseconds(),
                     });

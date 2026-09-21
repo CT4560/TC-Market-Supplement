@@ -132,6 +132,24 @@ describe("上傳資料驗證", () => {
     assert.ok(!validateUpload(upload({ listings: "nope" }), ctx).ok);
   });
 
+  test("成交的買家名稱：整理成字串（沒帶就是空字串）、截到 40 字、含角括號的成交略過", () => {
+    const result = validateUpload(
+      upload({
+        sales: [
+          { pricePerUnit: 5, quantity: 1, timestamp: NOW - 1000, buyerName: "  買家甲  " },
+          { pricePerUnit: 6, quantity: 1, timestamp: NOW - 2000 },
+          { pricePerUnit: 7, quantity: 1, timestamp: NOW - 3000, buyerName: 12345 },
+          { pricePerUnit: 8, quantity: 1, timestamp: NOW - 4000, buyerName: "<b>壞人</b>" },
+          { pricePerUnit: 9, quantity: 1, timestamp: NOW - 5000, buyerName: "長".repeat(60) },
+        ],
+      }),
+      ctx,
+    );
+    assert.ok(result.ok);
+    assert.deepEqual(result.value.sales.map((sale) => sale.pricePerUnit), [5, 6, 7, 9]);
+    assert.deepEqual(result.value.sales.map((sale) => sale.buyerName), ["買家甲", "", "", "長".repeat(40)]);
+  });
+
   test("成交：太舊的略過（不整筆拒絕）、在未來的拒絕", () => {
     const result = validateUpload(
       upload({
@@ -236,6 +254,26 @@ describe("寫入資料庫", () => {
     const newer = put({ capturedAt: base - 500, listings: [{ pricePerUnit: 80, quantity: 1, retainerName: "更新", listingId: "9003" }], sales: [] });
     assert.equal(newer.listingsIgnored, undefined);
     assert.equal(store.getEntry(W, ITEM)!.listings[0].pricePerUnit, 80);
+  });
+
+  test("成交會存買家名稱；同一時間同價格同數量但買家不同是兩筆，同買家重複上傳只算一筆", () => {
+    const now = Date.now();
+    const timestamp = now - 7_200_000;
+    const put = (buyerName: string) => {
+      const checked = validateUpload(
+        upload({ capturedAt: now - 100, listings: [], sales: [{ pricePerUnit: 321, quantity: 2, timestamp, buyerName }] }),
+        { ...ctx, now },
+      );
+      assert.ok(checked.ok);
+      return applyUpload(store, checked.value, now).salesInserted;
+    };
+
+    assert.equal(put("買家甲"), 1);
+    assert.equal(put("買家甲"), 0, "同買家重複上傳");
+    assert.equal(put("買家乙"), 1, "買家不同是另一筆");
+
+    const rows = rawDb.prepare("SELECT buyerName FROM sales WHERE saleTimestamp = ? ORDER BY buyerName").all(timestamp) as Array<{ buyerName: string }>;
+    assert.deepEqual(rows.map((row) => row.buyerName).sort(), ["買家乙", "買家甲"].sort());
   });
 
   test("成交寫入成交表、重複上傳不會重複（唯一索引）、超過 30 天的會被清掉", () => {

@@ -49,6 +49,8 @@ const MAX_CAPTURE_FUTURE_MS = 2 * 60_000;
 const SALES_RETENTION_MS = 30 * 86_400_000;
 /** 資料庫每個世界每個物品只留最低價的前幾筆，跟其他資料來源一致。 */
 const STORED_LISTINGS_LIMIT = 10;
+/** 雇員名稱、買家名稱的長度上限（遊戲內角色名稱遠短於這個數字）。 */
+const MAX_NAME_LENGTH = 40;
 
 export interface UploadListing {
   pricePerUnit: number;
@@ -64,6 +66,8 @@ export interface UploadListing {
 export interface UploadSale {
   pricePerUnit: number;
   quantity: number;
+  /** 買家名稱（市場板成交紀錄上本來就公開顯示的角色名稱）；沒有就是空字串。 */
+  buyerName: string;
   /** 毫秒 */
   timestamp: number;
 }
@@ -124,7 +128,7 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
       listingId = raw.listingId;
     }
 
-    const retainerName = typeof raw.retainerName === "string" ? raw.retainerName.slice(0, 40) : "-";
+    const retainerName = typeof raw.retainerName === "string" ? raw.retainerName.slice(0, MAX_NAME_LENGTH) : "-";
     // 雇員名稱是遊戲內的自由文字，正常不會有角括號；Universalis 遇到 HTML 標籤會拒絕上傳。
     // 這裡沿用「單筆略過、不整包打回」的作法（跟太舊的成交一樣），不影響同一批其他合法資料。
     if (/[<>]/.test(retainerName)) continue;
@@ -144,9 +148,11 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
     if (!isInt(raw.quantity, 1, MAX_QUANTITY)) return fail("invalid sale quantity");
     if (!isInt(raw.timestamp, 1, Number.MAX_SAFE_INTEGER)) return fail("invalid sale timestamp");
     if (raw.timestamp > capturedAt + MAX_CAPTURE_FUTURE_MS) return fail("sale timestamp is in the future");
+    const buyerName = typeof raw.buyerName === "string" ? raw.buyerName.trim().slice(0, MAX_NAME_LENGTH) : "";
+    if (/[<>]/.test(buyerName)) continue; // 跟雇員名稱一樣：像 HTML 標籤的整筆略過
     if (context.now - raw.timestamp > SALES_RETENTION_MS) continue; // 太舊的成交不收（會被清掉），略過而不是整筆拒絕
 
-    sales.push({ pricePerUnit: raw.pricePerUnit, quantity: raw.quantity, timestamp: raw.timestamp });
+    sales.push({ pricePerUnit: raw.pricePerUnit, quantity: raw.quantity, buyerName, timestamp: raw.timestamp });
   }
 
   return { ok: true, value: { worldId: input.worldId, itemId: input.itemId, capturedAt, listings, sales } };
@@ -197,9 +203,10 @@ export function applyUpload(store: CollectorStore, upload: NormalizedUpload, now
   const sales: StoredSale[] = upload.sales.map((sale) => ({
     pricePerUnit: sale.pricePerUnit,
     quantity: sale.quantity,
+    buyerName: sale.buyerName,
     saleTimestamp: sale.timestamp,
   }));
-  // 買家名稱一律不存（外掛也不會送）；重複上傳會被唯一索引擋掉。
+  // 重複上傳會被唯一索引擋掉（買家名稱也是索引的一部分，沒有名稱存空字串）。
   const salesInserted = sales.length > 0 ? store.insertSales(upload.worldId, upload.itemId, sales, now, now) : 0;
 
   return listingsIgnored ? { listingsStored: 0, salesInserted, listingsIgnored } : { listingsStored: stored.length, salesInserted };

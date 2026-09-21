@@ -24,6 +24,8 @@ export interface StoredEntry {
 export interface StoredSale {
   pricePerUnit: number;
   quantity: number;
+  /** 買家名稱；沒有就是空字串。 */
+  buyerName: string;
   /** 成交發生的時間，毫秒。 */
   saleTimestamp: number;
 }
@@ -42,8 +44,8 @@ function prepareStatements(db: Database.Database) {
       ON CONFLICT (worldId, itemId) DO UPDATE SET listings = excluded.listings, uploadedAt = excluded.uploadedAt
     `),
     insertSale: db.prepare(`
-      INSERT OR IGNORE INTO sales (worldId, itemId, pricePerUnit, quantity, saleTimestamp, capturedAt)
-      VALUES (@worldId, @itemId, @pricePerUnit, @quantity, @saleTimestamp, @capturedAt)
+      INSERT OR IGNORE INTO sales (worldId, itemId, pricePerUnit, quantity, buyerName, saleTimestamp, capturedAt)
+      VALUES (@worldId, @itemId, @pricePerUnit, @quantity, @buyerName, @saleTimestamp, @capturedAt)
     `),
     deleteOldSales: db.prepare(`DELETE FROM sales WHERE saleTimestamp < ?`),
     countSales: db.prepare(`SELECT COUNT(*) AS n FROM sales`),
@@ -61,7 +63,7 @@ type Statements = ReturnType<typeof prepareStatements>;
  * 資料表：
  *   items    可接受回報的物品清單（白名單）
  *   snapshot 每個世界每個物品「目前的掛單」
- *   sales    成交紀錄（不存買家名稱）
+ *   sales    成交紀錄（含買家名稱，市場板成交紀錄上本來就公開顯示）
  */
 export class CollectorStore {
   private readonly stmts: Statements;
@@ -90,9 +92,10 @@ export class CollectorStore {
         itemId INTEGER NOT NULL,
         pricePerUnit INTEGER NOT NULL,
         quantity INTEGER NOT NULL,
+        buyerName TEXT NOT NULL DEFAULT '',
         saleTimestamp INTEGER NOT NULL,
         capturedAt INTEGER NOT NULL,
-        UNIQUE (worldId, itemId, saleTimestamp, pricePerUnit, quantity)
+        UNIQUE (worldId, itemId, saleTimestamp, pricePerUnit, quantity, buyerName)
       );
       CREATE INDEX IF NOT EXISTS idx_sales_world_item_ts ON sales (worldId, itemId, saleTimestamp);
       CREATE INDEX IF NOT EXISTS idx_sales_saleTimestamp ON sales (saleTimestamp);
