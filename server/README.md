@@ -128,8 +128,18 @@ curl http://127.0.0.1:8787/health
 Cloudflare 預設**不會**快取 JSON（回應會顯示 `cf-cache-status: DYNAMIC`），要自己加一條 Cache Rule，相同網址的重複請求才會由 Cloudflare 邊緣直接回，不用回到這台伺服器（也不佔用這裡的限流名額）。在 Cloudflare 後台選這個網域 → **Caching → Cache Rules → Create rule**：
 
 - **When incoming requests match**：自訂篩選，`URI Path` **starts with** `/api/v2/`（不要包含 `/api/ws`，WebSocket 不能快取；上傳 `/community/*` 也不要）。
-- **Then**：Cache eligibility 選 **Eligible for cache**；Edge TTL 選 **Ignore cache-control header and use this TTL**，填 **10 seconds**（或選 Use cache-control header if present，伺服器已經回 `Cache-Control: public, max-age=10`）。
-- Cache key 維持預設（含查詢字串，不同參數會分開快取）。
+- **Hostname 也要限定**：加一個條件 `Hostname` **equals** `api-ffxiv-bot.epicurean-expedition.com`（跟上面的 URI Path 用 AND 組合），避免這條規則影響同一個網域底下的其他網站。
+- **Then**：Cache eligibility 選 **Eligible for cache**；Edge TTL 選 **Use cache-control header if present, bypass cache if not**（伺服器對成功的回應會送 `Cache-Control: public, max-age=10`，錯誤回應是 `no-store`，所以只有成功的查詢會被快取 10 秒）。
+- **不要選「Ignore cache-control header and use this TTL」來填 10 秒**：依 Cloudflare 文件，Edge TTL 覆寫有最短限制（Free 方案 2 小時、Pro 1 小時，Business／Enterprise 才能到 1 秒），在 Free／Pro 上會讓價格資料過期好幾個小時。
+- Cache key 維持預設。
+
+設定後驗證（連續打兩次同一個網址）：
+
+```bash
+curl -sI "https://api-ffxiv-bot.epicurean-expedition.com/api/v2/worlds" | grep -iE "cf-cache-status|^age"
+```
+
+第一次應該是 `cf-cache-status: MISS`，10 秒內的第二次是 `HIT` 並帶 `age`（秒）。如果一直是 `DYNAMIC`，代表規則沒有生效（條件沒符合，或該方案不接受這個設定）；那就不要勉強，直接靠伺服器端的限流即可。
 
 快取只擋「完全相同網址」的重複請求；有人每次加不同的查詢字串來繞過快取時，靠上面依物品數加權的限流擋住。
 
