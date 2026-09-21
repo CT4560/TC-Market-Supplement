@@ -1,18 +1,9 @@
 #!/usr/bin/env bash
-# 備份社群回報伺服器的資料庫（SQLite）。在跑 Docker 的那台機器上執行，通常由 cron 每天呼叫一次。
-#
-# 做法：從 Docker 資料卷讀出 collector.db，用 SQLite 的 backup API 複製（服務執行中也安全，
-# 不會複製到寫到一半的頁面），驗證備份檔的完整性，壓縮，最後交給 rotate-backups.sh 依保留規則整理舊備份
-# （每日備份留 60 天；每兩個月一組，封存每組最後一份、留一年）。
-#
-# 環境變數（都有預設值）：
-#   VOLUME       Docker 資料卷名稱      預設 database-dalamud-collector_collector-data
-#   BACKUP_DIR   備份放哪裡            預設 /root/backups/collector
-#   KEEP_DAILY_DAYS / KEEP_ARCHIVE_DAYS  保留規則的天數，預設 60／365，見 rotate-backups.sh
-#
-# 還原：停掉容器，`gunzip -k` 想還原的備份檔，把 .db 複製成資料卷裡的 collector.db（並刪掉舊的 -wal、-shm），
-# 確認檔案擁有者是 uid 1000（容器內的 node 使用者），再啟動容器。
-# 需要：docker、python3（標準庫的 sqlite3）、flock。
+# 備份資料庫：用 SQLite backup API 複製資料卷裡的 collector.db（服務執行中也安全），驗證完整性後壓縮，
+# 再交給 rotate-backups.sh 整理舊備份。通常由 cron 每天跑一次。
+# 環境變數：VOLUME（Docker 資料卷名稱）、BACKUP_DIR（預設 /root/backups/collector）。
+# 還原：停掉容器，gunzip 備份檔，複製成資料卷裡的 collector.db（刪掉 -wal、-shm，擁有者 uid 1000），再啟動。
+# 需要 docker、python3、flock。
 
 set -euo pipefail
 
@@ -21,7 +12,7 @@ BACKUP_DIR="${BACKUP_DIR:-/root/backups/collector}"
 
 mkdir -p "$BACKUP_DIR"
 
-# 同一時間只跑一份（上一次還沒跑完就跳過）。
+# 同時只跑一份
 exec 9>"$BACKUP_DIR/.lock"
 flock -n 9 || { echo "$(date -Is) another backup is still running, skipping" >> "$BACKUP_DIR/backup.log"; exit 0; }
 
@@ -55,5 +46,4 @@ gzip -f "$OUT"
 SIZE="$(stat -c %s "$OUT.gz")"
 echo "$(date -Is) backup ok $(basename "$OUT.gz") ${SIZE} bytes" >> "$BACKUP_DIR/backup.log"
 
-# 依保留規則封存與刪除舊備份（規則寫在 rotate-backups.sh）。
 BACKUP_DIR="$BACKUP_DIR" bash "$(dirname "$0")/rotate-backups.sh"

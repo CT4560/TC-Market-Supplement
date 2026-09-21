@@ -21,15 +21,13 @@ import {
   type WorldTarget,
 } from "./read-model.js";
 
-// 公開的讀取 API，路徑、參數與回應欄位相容 Universalis v2（時間一律 UTC 毫秒，含請求參數裡的時間長度）。
-// 沒有金鑰、沒有登入；靠每個來源 IP 的 token bucket 限流擋濫用。
+// 公開讀取 API，路徑與欄位相容 Universalis v2，時間一律是 UTC 毫秒。不需要金鑰，靠每個 IP 的限流擋濫用。
 
-/** 單次請求最多幾個物品（＝白名單物品總數，一次可以查全部）。 */
+/** 單次請求最多的物品數（＝白名單物品數）。 */
 export const MAX_ITEMS_PER_REQUEST = 112;
-/** 每多少個物品算一次請求的名額：查 1～10 個物品算 1 次，一次查全部 112 個算 12 次（回應大小約跟物品數成正比）。 */
+/** 每 10 個物品算一次名額，查全部 112 個算 12 次。 */
 export const ITEMS_PER_TOKEN = 10;
 
-/** 一個查物品的請求要用掉幾個名額。 */
 export function requestCost(itemCount: number): number {
   return Math.max(1, Math.ceil(itemCount / ITEMS_PER_TOKEN));
 }
@@ -45,7 +43,7 @@ export interface ApiContext {
   now: () => number;
 }
 
-/** 讀取端總開關：環境變數 COMMUNITY_API_ENABLED=on 才開，沒設或其他值＝端點不存在（回 404）。 */
+/** COMMUNITY_API_ENABLED=on 才開放讀取端。 */
 export function isCommunityApiEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.COMMUNITY_API_ENABLED?.trim().toLowerCase() === "on";
 }
@@ -79,7 +77,6 @@ function send(res: http.ServerResponse, status: number, body: unknown, extra: Re
   res.end(JSON.stringify(body));
 }
 
-/** 錯誤回應用 ASP.NET 的 problem details 格式，跟 Universalis 一致。 */
 function problem(res: http.ServerResponse, status: number, title: string, detail?: string, extra: Record<string, string> = {}): void {
   const body: Json = { type: PROBLEM_TYPES[status] ?? "about:blank", title, status };
   if (detail) body.detail = detail;
@@ -104,7 +101,6 @@ function parseItemIds(param: string): number[] | null {
   return [...new Set(parts.map(Number))];
 }
 
-/** 多物品請求的外層結構：世界版帶 worldID／worldName，資料中心版帶 dcName。 */
 function wrapItems(target: WorldTarget, itemIds: number[], unresolved: number[], items: Record<string, Json>): Json {
   return target.kind === "world"
     ? { itemIDs: itemIds, items, worldID: target.world.id, unresolvedItems: unresolved, worldName: target.world.name }
@@ -116,7 +112,6 @@ type FieldsResult = { ok: true; paths: string[][] | null } | { ok: false };
 function readFields(params: URLSearchParams): FieldsResult {
   if (!params.has("fields")) return { ok: true, paths: null };
   const paths = parseFields(params.get("fields"));
-  // 給了非空的 fields 卻解析不出來（例如有空的欄位名稱）才算錯；空字串當作沒給
   return paths === null && params.get("fields")?.trim() ? { ok: false } : { ok: true, paths };
 }
 
@@ -132,7 +127,6 @@ function worldsOf(target: WorldTarget): WorldRef[] {
   return target.kind === "world" ? [target.world] : target.worlds;
 }
 
-/** 讀取端的入口。呼叫端先確認 isApiV2Path 與 isCommunityApiEnabled。 */
 export function handleApiV2(req: http.IncomingMessage, res: http.ServerResponse, url: URL, clientIp: string, ctx: ApiContext): void {
   if (req.method === "OPTIONS") {
     res.writeHead(204, { ...corsHeaders(), "access-control-max-age": "86400" });
@@ -293,7 +287,7 @@ function tooManyRequests(res: http.ServerResponse, retryAfterMs: number): void {
   problem(res, 429, "Too Many Requests", "Rate limit exceeded; slow down.", { "retry-after": String(seconds) });
 }
 
-/** 查很多物品的請求要多收名額（已經收過 1 個）。不夠就回 429 並回傳 false。 */
+/** 查很多物品要多扣名額，不夠就回 429 並回傳 false。 */
 function chargeForItems(res: http.ServerResponse, ctx: ApiContext, clientIp: string, itemCount: number): boolean {
   const extra = requestCost(itemCount) - 1;
   if (extra <= 0) return true;

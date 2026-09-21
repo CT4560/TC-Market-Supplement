@@ -1,36 +1,30 @@
 import Database from "better-sqlite3";
 
-/** 成交保留一年（依成交發生的時間，不是收到的時間）。公開 API 目前只開放查最近 30 天，見 read-model.ts 的 MAX_WINDOW_MS。 */
+/** 成交保留一年。 */
 export const SALES_RETENTION_MS = 365 * 86_400_000;
 
-/** 一筆目前的掛單。 */
 export interface StoredListing {
   pricePerUnit: number;
   quantity: number;
   total: number;
   retainerName: string;
-  /** 遊戲給的掛單編號（十進位字串）。沒有的資料就沒有這個欄位。 */
   listingId?: string;
-  /** 伺服器「第一次看到這筆掛單」的時間，毫秒。封包裡沒有真正的上架時間，所以用這個代替。 */
+  /** 伺服器第一次看到這筆掛單的時間（毫秒），因為封包沒有真正的上架時間。 */
   firstSeenAt: number;
 }
 
 export interface StoredEntry {
   listings: StoredListing[];
-  /** 最近一次掃描（外掛擷取封包）的時間，毫秒。 */
   uploadedAt: number;
 }
 
 export interface StoredSale {
   pricePerUnit: number;
   quantity: number;
-  /** 買家名稱；沒有就是空字串。 */
   buyerName: string;
-  /** 成交發生的時間，毫秒。 */
   saleTimestamp: number;
 }
 
-/** 最近一次被回報的物品（給 most-recently-updated 用）。 */
 export interface RecentUpdate {
   worldId: number;
   itemId: number;
@@ -75,13 +69,7 @@ function prepareStatements(db: Database.Database) {
 
 type Statements = ReturnType<typeof prepareStatements>;
 
-/**
- * 這個服務自己的資料庫（SQLite），跟任何其他專案的資料庫都沒有關係。
- * 資料表：
- *   items    可接受回報的物品清單（白名單）
- *   snapshot 每個世界每個物品「目前的掛單」
- *   sales    成交紀錄（含買家名稱，市場板成交紀錄上本來就公開顯示）
- */
+/** SQLite：items（白名單）、snapshot（目前掛單）、sales（成交，含買家名稱）。 */
 export class CollectorStore {
   private readonly stmts: Statements;
 
@@ -122,7 +110,6 @@ export class CollectorStore {
 
   // ---------- 物品白名單 ----------
 
-  /** 用給定的清單整份取代白名單（啟動時從 data/items.json 讀進來）。 */
   replaceItems(items: CollectorItem[]): void {
     this.db.transaction(() => {
       this.stmts.deleteItems.run();
@@ -147,7 +134,6 @@ export class CollectorStore {
       const parsed: unknown = JSON.parse(row.listings);
       if (Array.isArray(parsed)) listings = parsed as StoredListing[];
     } catch {
-      // 壞掉的內容當作沒有掛單，下一次上傳會整份取代
     }
     return { listings, uploadedAt: row.uploadedAt };
   }
@@ -158,10 +144,7 @@ export class CollectorStore {
 
   // ---------- 成交 ----------
 
-  /**
-   * 一批成交包成一個交易寫入；回傳「真的新增」的那幾筆（重複的會被唯一索引擋掉，超過保留期的略過）。
-   * 呼叫端拿它當即時推播的內容，所以只能回真的寫進去的。
-   */
+  /** 一批成交寫成一個交易，回傳真的新增的（重複的、過期的不算）。 */
   insertSales = (worldId: number, itemId: number, sales: StoredSale[], capturedAt: number, now: number = Date.now()): StoredSale[] => {
     return this.db.transaction((): StoredSale[] => {
       const inserted: StoredSale[] = [];
@@ -174,13 +157,11 @@ export class CollectorStore {
     })();
   };
 
-  /** 某世界某物品的成交，新到舊；sinceMs 以前的不回（毫秒時間戳記）。 */
   getSales(worldId: number, itemId: number, options: { sinceMs?: number; limit?: number } = {}): StoredSale[] {
     const rows = this.stmts.getSales.all(worldId, itemId, options.sinceMs ?? 0, options.limit ?? 1800) as StoredSale[];
     return rows;
   }
 
-  /** 最近被回報的物品，新到舊；worldId 給了就只看那個世界。 */
   mostRecentlyUpdated(worldId: number | null, limit: number): RecentUpdate[] {
     return this.stmts.mostRecent.all(worldId, worldId, limit) as RecentUpdate[];
   }
@@ -193,7 +174,6 @@ export class CollectorStore {
     return (this.stmts.countSales.get() as { n: number }).n;
   }
 
-  /** 連線探測，給 /health 用；資料庫壞了會丟出例外。 */
   ping(): void {
     this.db.prepare("SELECT 1").get();
   }

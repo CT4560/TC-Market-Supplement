@@ -1,7 +1,6 @@
 using MarketBoardCollector;
 
-// 上傳佇列、去重、退避的測試。沒有用測試框架，跑完印出結果，有失敗就以非 0 結束。
-//   cd tests/UploadQueue.Tests && dotnet run
+// 上傳佇列的測試（不用測試框架）：cd tests/UploadQueue.Tests && dotnet run
 
 var failures = 0;
 var total = 0;

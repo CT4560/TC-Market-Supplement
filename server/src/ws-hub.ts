@@ -6,30 +6,29 @@ import { TW_WORLDS } from "./worlds.js";
 import { formatListing, formatRecentSale, type WorldRef } from "./read-model.js";
 import type { UploadChanges } from "./community.js";
 
-// 即時推播：WebSocket，訊息是 BSON，訂閱協定跟 Universalis 相同。
-//   客戶端 → 伺服器  {event:"subscribe", channel:"listings/add{world=4033,item=5729}"}（unsubscribe 同格式）
-//   伺服器 → 客戶端  {event:"listings/add", item, world, listings:[…]}、{event:"listings/remove", …}、{event:"sales/add", item, world, sales:[…]}
-//   錯誤            {event:"error", code, message}
-// 頻道的篩選 world、item 都可以省略（省略＝該頻道全部），但只會有這個服務接受的世界與物品的資料。
+// 即時推播：BSON 訊息，訂閱協定同 Universalis。
+//   客戶端 {event:"subscribe"|"unsubscribe", channel:"listings/add{world=4033,item=5729}"}
+//   伺服器 {event:"listings/add"|"listings/remove"|"sales/add", item, world, listings|sales}
+//   錯誤   {event:"error", code, message}
 
 export const WS_PATH = "/api/ws";
 
 export interface WsHubOptions {
-  /** 每個來源 IP 最多同時幾條連線（Universalis 是 8）。 */
+  /** 每個 IP 最多同時幾條連線。 */
   maxPerIp: number;
   /** 全站最多同時幾條連線。 */
   maxTotal: number;
   /** 每條連線最多幾個訂閱。 */
   maxSubscriptions: number;
-  /** 客戶端單一訊息的大小上限（位元組），超過由 ws 直接關線（1009）。 */
+  /** 客戶端單一訊息的大小上限（位元組）。 */
   maxMessageBytes: number;
   /** 客戶端每秒最多幾則訊息。 */
   maxMessagesPerSecond: number;
-  /** 連上後多久內沒有訂閱任何頻道就關掉。 */
+  /** 連上後多久沒訂閱就關掉。 */
   idleWithoutSubscriptionMs: number;
-  /** 協定層 ping 的間隔（Cloudflare 閒置 100 秒會斷，所以要比這個短很多）。 */
+  /** 協定層 ping 的間隔（要比 Cloudflare 的 100 秒閒置逾時短）。 */
   pingIntervalMs: number;
-  /** 送出緩衝超過這個量（客戶端太慢）就關線，位元組。 */
+  /** 送出緩衝超過這麼多位元組就關線。 */
   maxBufferedBytes: number;
 }
 
@@ -56,7 +55,7 @@ interface Subscription {
 const WORLD_IDS = new Set(TW_WORLDS.map((world) => world.id));
 const WORLD_BY_ID = new Map<number, WorldRef>(TW_WORLDS.map((world) => [world.id, { id: world.id, name: world.name }]));
 
-/** 解析頻道字串，例如 `listings/add{world=4033,item=5729}`。格式不對回 null。 */
+/** 解析頻道字串，格式不對回 null。 */
 export function parseChannel(channel: unknown): Subscription | null {
   if (typeof channel !== "string" || channel.length > 200) return null;
   const match = /^(listings\/add|listings\/remove|sales\/add)(?:\{([^{}]*)\})?$/.exec(channel);
@@ -116,7 +115,6 @@ export class WsHub {
     return { connections: this.connections.size, subscriptions };
   }
 
-  /** 處理 HTTP 的 upgrade 請求：超過連線上限就回 429 並關掉，否則升級成 WebSocket。 */
   handleUpgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer, ip: string): void {
     if (this.connections.size >= this.options.maxTotal || (this.perIp.get(ip) ?? 0) >= this.options.maxPerIp) {
       socket.write("HTTP/1.1 429 Too Many Requests\r\nRetry-After: 30\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
@@ -168,14 +166,13 @@ export class WsHub {
     const socket = connection.socket;
     if (socket.readyState !== WebSocket.OPEN) return;
     if (socket.bufferedAmount > this.options.maxBufferedBytes) {
-      socket.terminate(); // 客戶端讀太慢，不能讓緩衝一直長大
+      socket.terminate();
       return;
     }
     socket.send(payload, { binary: true });
   }
 
   private onMessage(connection: Connection, data: RawData, isBinary: boolean): void {
-    // 速率：滑動一秒視窗內最多 maxMessagesPerSecond 則
     const current = this.now();
     connection.recentMessages = connection.recentMessages.filter((at) => current - at < 1000);
     if (connection.recentMessages.length >= this.options.maxMessagesPerSecond) {
@@ -221,13 +218,12 @@ export class WsHub {
     clearTimeout(connection.idleTimer);
   }
 
-  /** 上傳寫入成功後呼叫：把這次的變動推給符合訂閱的連線。內容沒變的（三個清單都空）不推。 */
+  /** 把這次上傳的變動推給符合訂閱的連線。 */
   publish(changes: UploadChanges): void {
     if (this.connections.size === 0) return;
     const world = WORLD_BY_ID.get(changes.worldId);
     if (!world) return;
 
-    // 每種事件的 BSON 只做一次，發給所有符合的連線
     const payloads: Array<[EventName, () => Uint8Array]> = [];
     if (changes.addedListings.length > 0) {
       payloads.push(["listings/add", () => serialize({ event: "listings/add", item: changes.itemId, world: changes.worldId, listings: changes.addedListings.map((l) => formatListing(l, world)) })]);
@@ -246,7 +242,7 @@ export class WsHub {
           if (!matches(subscription, event, changes.worldId, changes.itemId)) continue;
           encoded ??= build();
           this.sendRaw(connection, encoded);
-          break; // 同一個連線同一個事件只送一次
+          break;
         }
       }
     }
@@ -255,7 +251,7 @@ export class WsHub {
   private heartbeat(): void {
     for (const connection of this.connections) {
       if (!connection.alive) {
-        connection.socket.terminate(); // 上一輪 ping 都沒回 pong
+        connection.socket.terminate();
         continue;
       }
       connection.alive = false;

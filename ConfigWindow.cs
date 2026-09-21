@@ -4,10 +4,7 @@ using Dalamud.Interface.Windowing;
 
 namespace MarketBoardCollector;
 
-/// <summary>
-/// 設定視窗：切換上傳與本機寫檔，並顯示上傳狀態。
-/// 一律在 UI 執行緒繪製；與背景上傳工作共用的資料都透過 Plugin 的快照方法取得。
-/// </summary>
+/// <summary>設定視窗：切換上傳與本機寫檔，並顯示上傳狀態。</summary>
 public sealed class ConfigWindow : Window
 {
     private static readonly Vector4 Green = new(0.45f, 0.9f, 0.45f, 1f);
@@ -30,7 +27,6 @@ public sealed class ConfigWindow : Window
         SizeConstraints = new WindowSizeConstraints { MinimumSize = new Vector2(420, 360), MaximumSize = new Vector2(1200, 1000) };
     }
 
-    /// <summary>每次打開視窗都從目前生效的設定重新載入輸入欄（放棄沒儲存的修改）。</summary>
     public override void OnOpen() => ResetInputs();
 
     private void ResetInputs()
@@ -107,7 +103,7 @@ public sealed class ConfigWindow : Window
         }
         else
         {
-            ImGui.TextColored(Yellow, plugin.CurrentConfig.UploadEnabled ? "上傳：暫時不會送出（尚未設定社群伺服器網址，目前只寫本機檔案）" : "上傳：已關閉（目前只寫本機檔案）");
+            ImGui.TextColored(Yellow, "上傳：已關閉（目前只寫本機檔案）");
         }
 
         if (s.ItemListAtUtc is { } fetchedAt)

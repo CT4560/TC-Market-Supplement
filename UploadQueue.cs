@@ -3,19 +3,18 @@ using System.Text;
 
 namespace MarketBoardCollector;
 
-// 上傳的排隊、重試與去重邏輯。全部是純邏輯（時間都由呼叫端傳入），不依賴 Dalamud，
-// 所以可以在遊戲外用 tests/ 底下的小測試專案驗證。
+// 上傳佇列、去重與退避。不依賴 Dalamud，測試在 tests/UploadQueue.Tests。
 
-/// <summary>一次上傳嘗試的結果分類。</summary>
+/// <summary>一次上傳的結果分類。</summary>
 public enum SendOutcome
 {
-    /// <summary>伺服器收了（2xx）。</summary>
+    /// <summary>2xx。</summary>
     Success,
-    /// <summary>被限流（429）：稍後再送同一筆，不算失敗。</summary>
+    /// <summary>429，稍後再送。</summary>
     RateLimited,
-    /// <summary>網路錯誤、逾時、伺服器 5xx：退避後重試，重試次數用完就放棄。</summary>
+    /// <summary>網路錯誤、逾時、5xx，退避後重試。</summary>
     Retryable,
-    /// <summary>伺服器明確拒絕這筆（400／413／422／404…）：重送也不會成功，直接放棄。</summary>
+    /// <summary>被明確拒絕，不重送。</summary>
     Permanent,
 }
 
@@ -36,11 +35,10 @@ public sealed class UploadJob
     public uint ItemId { get; }
     public uint WorldId { get; }
     public string Body { get; }
-    /// <summary>掃描開始的時間（UTC 毫秒）。伺服器不收超過 15 分鐘前的掃描，所以太舊的不用再送。</summary>
+    /// <summary>掃描開始時間（UTC 毫秒），伺服器不收超過 15 分鐘的。</summary>
     public long CapturedAtMs { get; }
     public int ListingCount { get; }
     public int SalesCount { get; }
-    /// <summary>內容指紋（見 ScanFingerprint）。</summary>
     public string ContentHash { get; }
 
     public int Attempts { get; internal set; }
@@ -50,27 +48,15 @@ public sealed class UploadJob
 public enum EnqueueResult
 {
     Queued,
-    /// <summary>佇列裡已經有一模一樣的內容，不用再排。</summary>
     DuplicateOfQueued,
-    /// <summary>已排入，但佇列滿了，最舊的一筆被丟掉（在 Dropped 裡）。</summary>
     QueuedDroppedOldest,
 }
 
-/// <param name="Job">現在該送的那一筆；沒有就是 null。</param>
-/// <param name="Wait">沒有現在該送的，但之後還有：最多等多久再來看；佇列空了是 null。</param>
-/// <param name="Expired">這次檢查時發現太舊而被移除的。</param>
 public sealed record QueueStep(UploadJob? Job, TimeSpan? Wait, IReadOnlyList<UploadJob> Expired);
 
-/// <param name="GaveUp">重試次數用完，這筆被放棄了。</param>
-/// <param name="PausedFor">佇列暫停多久（限流或退避），沒有暫停是 null。</param>
 public sealed record ReportResult(bool GaveUp, TimeSpan? PausedFor);
 
-/// <summary>
-/// 有上限的上傳佇列（先進先出）。
-///   限流（429）與可重試的失敗不會丟資料：暫停一下再送同一筆，直到成功、被明確拒絕、重試用完或太舊。
-///   同一個世界同一個物品只留最新的一筆（新的掃描取代排隊中的舊掃描）。
-/// 不是執行緒安全的：呼叫端要自己加鎖。
-/// </summary>
+/// <summary>有上限的先進先出佇列。限流與暫時失敗的資料會留著重送，同一世界同一物品只留最新一筆。非執行緒安全，呼叫端要加鎖。</summary>
 public sealed class UploadQueue
 {
     public const int DefaultCapacity = 50;
@@ -79,7 +65,7 @@ public sealed class UploadQueue
     private static readonly TimeSpan DefaultRateLimitPause = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan MinPause = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan MaxPause = TimeSpan.FromSeconds(60);
-    // 第 1、2、3、4 次失敗後各等多久再試
+    // 第 1～4 次失敗後的等待時間
     private static readonly TimeSpan[] RetryDelays = { TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(135) };
 
     private readonly List<UploadJob> jobs = new();
@@ -102,7 +88,6 @@ public sealed class UploadQueue
             return (EnqueueResult.DuplicateOfQueued, null);
         }
 
-        // 同一個世界同一個物品排隊中的舊掃描已經過時，用新的取代
         jobs.RemoveAll(j => j.WorldId == job.WorldId && j.ItemId == job.ItemId);
         jobs.Add(job);
 
@@ -115,7 +100,7 @@ public sealed class UploadQueue
         return (EnqueueResult.Queued, null);
     }
 
-    /// <summary>取出現在該送的那一筆（不會從佇列拿掉，送完要呼叫 Report）。同時移除太舊的。</summary>
+    /// <summary>取出現在該送的一筆（送完要呼叫 Report），並移除太舊的。</summary>
     public QueueStep Next(DateTime nowUtc)
     {
         var expired = jobs.Where(j => nowUtc - DateTimeOffset.FromUnixTimeMilliseconds(j.CapturedAtMs).UtcDateTime > maxAge).ToList();
@@ -130,7 +115,6 @@ public sealed class UploadQueue
         return new QueueStep(null, jobs.Min(j => j.NextAttemptUtc) - nowUtc, expired);
     }
 
-    /// <summary>回報一筆送出的結果，決定它是留著重試還是拿掉。</summary>
     public ReportResult Report(UploadJob job, SendOutcome outcome, TimeSpan? retryAfter, DateTime nowUtc)
     {
         switch (outcome)
@@ -142,7 +126,7 @@ public sealed class UploadQueue
 
             case SendOutcome.RateLimited:
             {
-                // 照伺服器說的等（限制在 1～60 秒）；沒說就等 5 秒。資料留著，不算一次失敗。
+                // 照伺服器指定的時間等（1～60 秒），沒指定就 5 秒
                 var wait = Clamp(retryAfter ?? DefaultRateLimitPause, MinPause, MaxPause);
                 pausedUntil = nowUtc + wait;
                 job.NextAttemptUtc = pausedUntil;
@@ -159,7 +143,7 @@ public sealed class UploadQueue
                 }
 
                 var delay = RetryDelays[Math.Min(job.Attempts - 1, RetryDelays.Length - 1)];
-                pausedUntil = nowUtc + delay; // 網路或伺服器出問題時，全部先暫停，不要逐筆敲
+                pausedUntil = nowUtc + delay; // 網路或伺服器有問題時整個佇列先停
                 job.NextAttemptUtc = pausedUntil;
                 return new ReportResult(false, delay);
             }
@@ -175,11 +159,7 @@ public sealed class UploadQueue
     private static TimeSpan Clamp(TimeSpan value, TimeSpan min, TimeSpan max) => value < min ? min : value > max ? max : value;
 }
 
-/// <summary>
-/// 記住每個世界每個物品「最近成功送出的內容」。同樣的內容在時間窗內不用再送：
-/// 玩家反覆點同一個物品時，每次都送一樣的東西只是浪費流量。超過時間窗會再送一次，讓伺服器的「最後掃描時間」保持新鮮。
-/// 執行緒安全。
-/// </summary>
+/// <summary>記住各世界各物品最近成功送出的內容，同樣內容在時間窗內不重送。執行緒安全。</summary>
 public sealed class SentTracker
 {
     public static readonly TimeSpan DefaultWindow = TimeSpan.FromMinutes(10);
@@ -212,7 +192,7 @@ public sealed class SentTracker
     }
 }
 
-/// <summary>連續失敗之後，一段時間內不再嘗試（例如向伺服器要物品清單失敗時，不要每掃一個物品就再敲一次）。執行緒安全。</summary>
+/// <summary>失敗後一段時間內不再嘗試。執行緒安全。</summary>
 public sealed class RetryGate
 {
     private readonly object gate = new();
@@ -240,7 +220,7 @@ public sealed class RetryGate
     }
 }
 
-/// <summary>一次掃描內容的指紋：世界、物品、每筆掛單與成交的關鍵欄位（排序後，跟封包到達順序無關）。</summary>
+/// <summary>掃描內容的指紋，跟封包順序無關。</summary>
 public static class ScanFingerprint
 {
     public static string Compute(uint worldId, uint itemId, IEnumerable<string> listingKeys, IEnumerable<string> saleKeys)

@@ -1,12 +1,6 @@
-﻿# 本機打包腳本：建置 Release，產出可安裝的 dist\latest.zip。
-# 只做本機產物，不上傳、不發佈、不碰任何遠端。
-#
-# 用法（在專案資料夾）：  powershell -NoProfile -File .\pack.ps1
-#
-# 重點：
-# - 用台灣服啟動器自己的 Dalamud（DALAMUD_HOME 指向它的 Injector 資料夾）建置，不是國際版 XIVLauncher 的那套。
-# - 輸出到 dist\build，不會覆蓋 bin\Release（遊戲正在載入開發外掛時不會鎖檔）。
-# - latest.zip 由 Dalamud SDK 內建的 DalamudPackager 產生（含 DLL、deps.json 與完整的 manifest json）。
+﻿# 本機打包：建置 Release 並產生 dist\latest.zip，不上傳也不發佈。
+# 用法：powershell -NoProfile -File .\pack.ps1
+# 用台灣服啟動器的 Dalamud（DALAMUD_HOME）建置，輸出在 dist\build，不動 bin\Release。
 
 param(
     [string]$DalamudHome = 'C:\Users\charl\AppData\Roaming\FFXIVSimpleLauncher\Dalamud\Injector\',

@@ -1,6 +1,6 @@
 namespace MarketBoardCollector;
 
-/// <summary>某一時間點的狀態快照，給設定視窗顯示用（不含金鑰）。</summary>
+/// <summary>給設定視窗顯示用的狀態快照。</summary>
 public sealed record StatusSnapshot(
     bool UploadEnabled,
     string Endpoint,
@@ -17,10 +17,7 @@ public sealed record StatusSnapshot(
     long UploadSkipped,
     int Queued);
 
-/// <summary>
-/// 本次遊戲階段的上傳統計。背景 Task 寫入、UI 執行緒讀取，所以計數用 Interlocked、訊息用鎖保護。
-/// 訊息只放簡短的結果說明，絕不放金鑰。
-/// </summary>
+/// <summary>本次遊戲階段的上傳統計，背景工作寫、UI 讀。</summary>
 public sealed class CollectorStatus
 {
     private const int MaxMessageLength = 160;
@@ -48,7 +45,7 @@ public sealed class CollectorStatus
         }
     }
 
-    /// <summary>還在重試、尚未成功也尚未放棄：只更新訊息，不算成功或失敗。</summary>
+    /// <summary>重試中：只更新訊息，不計成功或失敗。</summary>
     public void RecordPending(string message)
     {
         lock (gate)
@@ -59,7 +56,7 @@ public sealed class CollectorStatus
         }
     }
 
-    /// <summary>內容跟最近送過的一樣而略過：不是錯誤，單獨計數。</summary>
+    /// <summary>內容沒變而略過：單獨計數，不算錯誤。</summary>
     public void RecordSkipped(string message)
     {
         Interlocked.Increment(ref uploadSkipped);
@@ -88,7 +85,7 @@ public sealed class CollectorStatus
         }
     }
 
-    /// <summary>壓成單行並限制長度（伺服器回的錯誤訊息可能很長）。</summary>
+    /// <summary>壓成單行並限制長度。</summary>
     public static string Shorten(string text)
     {
         var singleLine = text.Replace('\r', ' ').Replace('\n', ' ').Trim();

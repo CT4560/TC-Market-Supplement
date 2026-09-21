@@ -1,15 +1,6 @@
-// 產生 data/items.json：「繁中服可以在市場板交易、但 Universalis 沒有價格資料」的物品清單，
-// 也就是這個服務接受社群回報的物品白名單（目前約 112 個，例如 7.5 整併前的舊染劑與色素）。
-//
-// 資料來源（都是公開資料，只讀取）：
-//   - https://universalis.app/api/v2/marketable            Universalis 有市場資料的物品編號
-//   - thewakingsands/ffxiv-datamining-tc 的 Item.csv       繁中服的物品資料表（名稱、可否交易）
-//   - https://v2.xivapi.com                                英文名稱（失敗不致命）
-//
-// 判斷方式：繁中服資料標示可交易（ItemSearchCategory 非 0 且不是 IsUntradable），而且不在 Universalis 的
-// marketable 清單裡。Universalis 跟著全球最新版，繁中服版本較舊，所以舊染劑在繁中服仍可交易、Universalis 卻沒有。
-//
-// 用法（在 server 資料夾）：  node scripts/build-items.mjs
+// 產生 data/items.json：繁中服可交易、但 Universalis 沒有價格資料的物品（社群回報的白名單，約 112 個）。
+// 資料來源：Universalis 的 marketable 清單、thewakingsands/ffxiv-datamining-tc 的 Item.csv、v2.xivapi.com（英文名稱）。
+// 用法：node scripts/build-items.mjs
 
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -22,14 +13,13 @@ const COMMIT_API_URL = `https://api.github.com/repos/${REPO}/commits/${BRANCH}`;
 const MARKETABLE_URL = "https://universalis.app/api/v2/marketable";
 const USER_AGENT = "database-dalamud-collector-build-items";
 
-// Universalis 目前列出約 16800 筆；拿到明顯偏少的清單代表 API 故障，中止而不是把一堆物品當成「沒資料」。
+// 低於這個數量代表 API 有問題，中止
 const MIN_MARKETABLE_COUNT = 10000;
-// 無價格資料的物品預期約 112 個；超過這個上限代表欄位判讀出了問題，中止。
+// 超過這個數量代表判讀出錯，中止
 const MAX_ITEMS = 1000;
 
 const OUTPUT_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "items.json");
 
-/** 解析 SaintCoinach 匯出的 CSV（含引號、逃脫引號、跨行欄位）。 */
 export function parseCsv(text) {
   const rows = [];
   let row = [];
@@ -57,7 +47,6 @@ export function parseCsv(text) {
       row.push(field);
       field = "";
     } else if (c === "\r") {
-      // 交由 \n 結束該行
     } else if (c === "\n") {
       row.push(field);
       rows.push(row);
@@ -73,10 +62,8 @@ export function parseCsv(text) {
   return rows;
 }
 
-/** 從繁中 Item.csv 挑出「繁中服可交易、但不在 marketableIds 裡」的物品。 */
 export function extractItems(csvText, marketableIds) {
   const rows = parseCsv(csvText);
-  // 前三行是 SaintCoinach 的 header：欄位索引 / 欄位名稱 / 資料型別。
   const header = rows[1];
   const nameIndex = header.indexOf("Name");
   const categoryIndex = header.indexOf("ItemSearchCategory");

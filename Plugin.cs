@@ -10,22 +10,15 @@ using Dalamud.Plugin.Services;
 namespace MarketBoardCollector;
 
 /// <summary>
-/// 掃描市場板時收集「繁中服可交易、但 Universalis 沒有價格資料」的物品（舊染劑等），回報給我們自己的伺服器。
-///
-/// 一次掃描 ＝ 你在市場板點進某個商品：遊戲會分好幾個封包傳掛單（每包最多 10 筆，同一個 RequestId），
-/// 再傳一包成交紀錄。封包沒有「掛單結束」的標記，所以用「這個物品安靜 2 秒」當作這次掃描結束。
-/// 沒有人在賣時，遊戲不會傳掛單封包，只有成交紀錄 —— 這種情況視為「目前沒有掛單」。
-/// 不記錄玩家名稱，只留雇員名稱（市場板上公開的）。
-///
-/// 外掛完全被動：只處理玩家自己打開市場板時收到的封包，不會操作遊戲、不會自動翻市場板。
+/// 被動記錄玩家在市場板點開的物品，只把伺服器接受的物品（舊染劑等）的掛單與成交紀錄回報出去。
+/// 掛單分成多個封包送來、沒有結束標記，所以物品安靜 2 秒就算一次掃描結束；沒人在賣時只有成交紀錄，視為目前沒有掛單。
+/// 不會操作遊戲。
 /// </summary>
 public sealed class Plugin : IDalamudPlugin
 {
     private const string CommandName = "/mbcollector";
 
-    // 所有玩家都回報到同一個官方社群伺服器，所以網址寫死在這裡，不讓玩家自己填。
-    // 官方社群伺服器的網址（Cloudflare Tunnel 接到 VPS 上的容器）。如果哪天換成還沒填的佔位字串（含 REPLACE_WITH），
-    // 即使「啟用上傳」開著也不會送出任何請求。
+    // 上傳位址寫死，玩家不能改。
     private const string DefaultEndpoint = "https://api-ffxiv-bot.epicurean-expedition.com";
     private const string EndpointOverrideVariable = "MBCOLLECTOR_ENDPOINT";
 
@@ -33,8 +26,7 @@ public sealed class Plugin : IDalamudPlugin
     private static readonly TimeSpan ItemListRefresh = TimeSpan.FromMinutes(30);
     private const long MaxCaptureFileBytes = 5 * 1024 * 1024;
 
-    // 對齊伺服器 community.ts 的 MAX_LISTINGS_PER_UPLOAD / MAX_SALES_PER_UPLOAD：超過或有不合法數值
-    // 整包會被伺服器 400 拒絕，所以外掛端先過濾、截斷，避免因為單一筆爛資料丟掉整次掃描的回報。
+    // 上限與伺服器一致，超過的話整包會被拒絕。
     private const int MaxListingsPerUpload = 100;
     private const int MaxSalesPerUpload = 50;
 
@@ -57,7 +49,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ConcurrentDictionary<uint, Scan> scans = new();
     private readonly Timer flushTimer;
     private readonly CollectorStatus status = new();
-    // 上傳佇列（見 UploadQueue.cs）：被限流或暫時失敗的掃描結果留在裡面重試，不直接丟掉。queue 只在 queueLock 保護下讀寫。
+    // 上傳佇列（UploadQueue.cs），只在 queueLock 內存取。
     private readonly UploadQueue queue = new();
     private readonly object queueLock = new();
     private readonly SentTracker sent = new();
@@ -66,11 +58,9 @@ public sealed class Plugin : IDalamudPlugin
     private readonly WindowSystem windowSystem = new("MarketBoardCollector");
     private readonly ConfigWindow configWindow;
 
-    // 設定與物品清單會在背景 Task（掃描結束、上傳）與 UI 執行緒（設定視窗）之間共用。
-    // 兩者都只用「整個換掉」的方式更新（參考指派是不可分割的），讀取端每次操作先抓一份快照，不會看到改到一半的狀態。
+    // 設定與物品清單都是整個換掉、不就地修改，讀取端先取快照。
     private volatile CollectorConfig config = new();
-    // 開發者測試用：啟動時讀一次環境變數 MBCOLLECTOR_ENDPOINT，非空白就取代寫死的網址（環境變數不會在遊戲執行中變動）。
-    // 不出現在設定視窗、也不寫進 config.json，一般玩家用不到。
+    // 環境變數 MBCOLLECTOR_ENDPOINT 可以覆寫上傳位址，只給開發測試用。
     private readonly string endpoint = ResolveEndpoint();
     private volatile ItemList itemList = ItemList.Empty;
     private int refreshing;
@@ -90,9 +80,8 @@ public sealed class Plugin : IDalamudPlugin
         public bool ListingsTrimmed;
         public readonly List<object> Listings = new();
         public readonly List<object> Sales = new();
-        // 同一次掃描裡，同一筆掛單（同編號）只留一次：使用者在 2 秒內重開同一個物品時，封包會再來一輪。
+        // 同一次掃描裡同編號的掛單只留一次。
         public readonly HashSet<string> ListingIds = new();
-        // 內容指紋用的關鍵欄位（見 ScanFingerprint），跟 Listings／Sales 一一對應。
         public readonly List<string> ListingKeys = new();
         public readonly List<string> SaleKeys = new();
     }
@@ -135,12 +124,12 @@ public sealed class Plugin : IDalamudPlugin
         marketBoard.HistoryReceived += OnHistory;
         flushTimer = new Timer(_ => FlushQuietScans(), null, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
 
-        // 第一次使用：登入遊戲之後在聊天視窗說明一次「預設會回報什麼、怎麼關」。
+        // 第一次登入後在聊天視窗說明一次。
         if (!config.NoticeShown) framework.Update += OnFrameworkUpdate;
 
         log.Information(
             "[MarketBoardCollector] started. upload={Upload}, capture file={Path}",
-            IsUploadEnabled(config) ? endpoint : (config.UploadEnabled ? "off (server endpoint not set yet)" : "off (disabled in settings)"),
+            IsUploadEnabled(config) ? endpoint : "off (disabled in settings)",
             capturePath);
     }
 
@@ -165,11 +154,7 @@ public sealed class Plugin : IDalamudPlugin
         return string.IsNullOrEmpty(overridden) ? DefaultEndpoint : overridden;
     }
 
-    /// <summary>伺服器網址還是佔位字串（尚未填入正式網址、也沒用環境變數覆寫）。</summary>
-    public bool EndpointIsPlaceholder => endpoint.Contains("REPLACE_WITH", StringComparison.Ordinal);
-
-    /// <summary>真正會上傳：使用者的「啟用上傳」開著，而且已經有可用的伺服器網址。</summary>
-    private bool IsUploadEnabled(CollectorConfig c) => c.UploadEnabled && !EndpointIsPlaceholder;
+    private static bool IsUploadEnabled(CollectorConfig c) => c.UploadEnabled;
 
     // ---------- 設定視窗 ----------
 
@@ -177,7 +162,6 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string args) => configWindow.Toggle();
 
-    /// <summary>目前生效的設定（唯讀快照，不要就地修改）。</summary>
     public CollectorConfig CurrentConfig => config;
 
     private int QueuedCount()
@@ -207,10 +191,7 @@ public sealed class Plugin : IDalamudPlugin
             QueuedCount());
     }
 
-    /// <summary>
-    /// 儲存設定到 config.json 並立刻套用（下一次上傳／取清單就用新設定，不必重開遊戲）。
-    /// 成功回傳 null，失敗回傳給使用者看的錯誤說明（此時舊設定維持不變）。
-    /// </summary>
+    /// <summary>儲存設定並立即生效。成功回傳 null，失敗回傳錯誤說明。</summary>
     public string? SaveConfig(bool uploadEnabled, bool captureToFile)
     {
         CollectorConfig next;
@@ -220,14 +201,14 @@ public sealed class Plugin : IDalamudPlugin
             var error = PersistConfig(next, out var previous);
             if (error is not null) return error;
 
-            // 從關閉切回開啟時，舊的「可上傳物品清單」可能已經過期，下次上傳時重新向伺服器要。
+            // 從關閉切回開啟時，下次上傳重新取物品清單。
             if (!previous.UploadEnabled && next.UploadEnabled)
             {
                 itemList = ItemList.Empty;
             }
         }
 
-        // 關掉上傳：還在排隊的掃描結果不送了（使用者不想回報）
+        // 關掉上傳就不送還在排隊的資料。
         if (!next.UploadEnabled)
         {
             lock (queueLock) queue.Clear();
@@ -237,13 +218,13 @@ public sealed class Plugin : IDalamudPlugin
         return null;
     }
 
-    /// <summary>把設定寫進 config.json 並換上新的實例。要在 configLock 裡呼叫。成功回傳 null（previous 是換掉前的設定）。</summary>
+    /// <summary>寫入 config.json 並換上新的設定，要在 configLock 內呼叫。</summary>
     private string? PersistConfig(CollectorConfig next, out CollectorConfig previous)
     {
         previous = config;
         try
         {
-            // 先寫暫存檔再換掉，避免寫到一半當機留下壞掉的 config.json。
+            // 先寫暫存檔再換掉，避免寫一半壞檔。
             var tempPath = configPath + ".tmp";
             File.WriteAllText(tempPath, JsonSerializer.Serialize(next, new JsonSerializerOptions { WriteIndented = true }));
             File.Move(tempPath, configPath, overwrite: true);
@@ -274,7 +255,7 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
-    /// <summary>在背景向伺服器重新取得物品清單（給設定視窗的「測試連線」按鈕用）。已在進行中或未啟用上傳時回傳 false。</summary>
+    /// <summary>重新向伺服器取得物品清單（測試連線按鈕用）。</summary>
     public bool RefreshItemListNow()
     {
         var cfg = config;
@@ -310,7 +291,6 @@ public sealed class Plugin : IDalamudPlugin
             }
 
             var loaded = JsonSerializer.Deserialize<CollectorConfig>(File.ReadAllText(configPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new CollectorConfig();
-            // 舊版 config.json 裡的 Endpoint／UploadKey 欄位已經不存在，反序列化時會被忽略，不需要處理。
             config = loaded;
         }
         catch (Exception ex)
@@ -329,10 +309,7 @@ public sealed class Plugin : IDalamudPlugin
         _ => $"HTTP {code}",
     };
 
-    /// <summary>
-    /// 取得目前可上傳的物品清單。回傳 null 表示拿不到（未啟用上傳、或請求失敗且沒有舊清單可用）。
-    /// 用呼叫當下的設定快照 cfg 判斷是否啟用，中途改設定不會讓舊設定的結果蓋掉新設定的清單。
-    /// </summary>
+    /// <summary>取得可上傳的物品清單，拿不到回傳 null。</summary>
     private async Task<HashSet<uint>?> EnsureItemListAsync(CollectorConfig cfg, bool force = false)
     {
         if (!IsUploadEnabled(cfg)) return null;
@@ -340,7 +317,7 @@ public sealed class Plugin : IDalamudPlugin
         var cached = itemList;
         if (!force && DateTime.UtcNow - cached.FetchedAtUtc < ItemListRefresh && cached.Ids.Count > 0) return cached.Ids;
         var fallback = cached.Ids.Count > 0 ? cached.Ids : null;
-        // 剛失敗過：一段時間內不再敲伺服器（每掃一個物品就試一次會白等 15 秒逾時）
+        // 剛失敗過，先不再試
         if (!force && !itemListGate.CanAttempt(DateTime.UtcNow)) return fallback;
 
         try
@@ -358,7 +335,6 @@ public sealed class Plugin : IDalamudPlugin
             var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: stop.Token);
             var ids = json.GetProperty("itemIds").EnumerateArray().Select(e => e.GetUInt32()).ToHashSet();
 
-            // 請求期間如果使用者把上傳關掉了，這份清單就不要放進快取。
             if (config.UploadEnabled)
             {
                 itemList = new ItemList(ids, DateTime.UtcNow);
@@ -413,12 +389,11 @@ public sealed class Plugin : IDalamudPlugin
                 scan.GotOfferings = true;
                 foreach (var l in listings)
                 {
-                    // 防禦：理論上遊戲不會給 0 或負值，但一旦出現，伺服器會把整包上傳都拒絕（400）；
-                    // 略過這一筆比丟掉整次掃描的其他正常資料好。
+                    // 略過不合法的值，避免整包被伺服器拒絕
                     if (l.PricePerUnit <= 0 || l.ItemQuantity <= 0) continue;
 
                     var listingId = l.ListingId.ToString();
-                    if (!scan.ListingIds.Add(listingId)) continue; // 同一次掃描裡已經有這筆了
+                    if (!scan.ListingIds.Add(listingId)) continue;
 
                     scan.ListingKeys.Add($"{listingId}:{l.PricePerUnit}:{l.ItemQuantity}:{l.RetainerName}");
                     scan.Listings.Add(new
@@ -427,12 +402,11 @@ public sealed class Plugin : IDalamudPlugin
                         quantity = l.ItemQuantity,
                         hq = l.IsHq,
                         retainerName = l.RetainerName,
-                        // 64 位元整數，用字串傳才不會在 JSON 裡失真
+                        // 64 位元編號用字串傳
                         listingId,
                     });
                 }
 
-                // 對齊伺服器上限（見 MaxListingsPerUpload 的說明）；正常情況不會觸發，只是保險。
                 if (scan.Listings.Count > MaxListingsPerUpload)
                 {
                     scan.Listings.RemoveRange(MaxListingsPerUpload, scan.Listings.Count - MaxListingsPerUpload);
@@ -462,7 +436,6 @@ public sealed class Plugin : IDalamudPlugin
                 scan.SaleKeys.Clear();
                 foreach (var s in history.HistoryListings)
                 {
-                    // 防禦：理由同掛單那邊——一筆爛資料不該拖累整包上傳。
                     if (s.SalePrice <= 0 || s.Quantity <= 0) continue;
 
                     var purchasedAtMs = new DateTimeOffset(DateTime.SpecifyKind(s.PurchaseTime, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
@@ -472,14 +445,11 @@ public sealed class Plugin : IDalamudPlugin
                         pricePerUnit = s.SalePrice,
                         quantity = s.Quantity,
                         hq = s.IsHq,
-                        // 市場板成交紀錄本來就公開顯示的買家名稱。
                         buyerName = s.BuyerName ?? "",
-                        // 封包裡的真實成交時間（UTC）
                         timestamp = purchasedAtMs,
                     });
                 }
 
-                // 成交紀錄固定是最近 20 筆，理論上不會超過伺服器上限，這裡只是保險。
                 if (scan.Sales.Count > MaxSalesPerUpload)
                 {
                     scan.Sales.RemoveRange(MaxSalesPerUpload, scan.Sales.Count - MaxSalesPerUpload);
@@ -508,7 +478,6 @@ public sealed class Plugin : IDalamudPlugin
     {
         try
         {
-            // 這次掃描從頭到尾用同一份設定快照，中途儲存新設定不會讓一次掃描前後不一致。
             var cfg = config;
 
             object[] listings;
@@ -547,9 +516,9 @@ public sealed class Plugin : IDalamudPlugin
             }
             var accepted = await EnsureItemListAsync(cfg);
             if (accepted is null) return;
-            if (!accepted.Contains(itemId)) return; // Universalis 有資料的物品不用我們回報
+            if (!accepted.Contains(itemId)) return; // 伺服器不收的物品不回報
 
-            // 跟最近成功送出的內容完全一樣就不用再送（玩家反覆點同一個物品時）；超過 10 分鐘會再送一次，刷新伺服器的掃描時間。
+            // 內容跟最近送出的一樣就不重送，超過 10 分鐘會再送一次
             var hash = ScanFingerprint.Compute(scan.WorldId, itemId, listingKeys, saleKeys);
             if (sent.WasSentRecently(scan.WorldId, itemId, hash, DateTime.UtcNow))
             {
@@ -592,7 +561,7 @@ public sealed class Plugin : IDalamudPlugin
         _ = Task.Run(PumpAsync);
     }
 
-    /// <summary>一次只跑一個：依序送出佇列裡的東西；被限流或暫時失敗就等一下再送同一筆，佇列空了就結束。</summary>
+    /// <summary>依序送出佇列裡的東西，限流或暫時失敗就等一下再送。</summary>
     private async Task PumpAsync()
     {
         var crashed = false;
@@ -615,7 +584,7 @@ public sealed class Plugin : IDalamudPlugin
 
                 if (step.Job is null)
                 {
-                    if (step.Wait is null) break; // 佇列空了
+                    if (step.Wait is null) break;
                     var wait = step.Wait.Value < TimeSpan.FromSeconds(30) ? step.Wait.Value : TimeSpan.FromSeconds(30);
                     await Task.Delay(wait, stop.Token);
                     continue;
@@ -639,7 +608,7 @@ public sealed class Plugin : IDalamudPlugin
         finally
         {
             Volatile.Write(ref pumping, 0);
-            // 迴圈結束到放掉旗標之間，可能又有新的排進來
+            // 放掉旗標前可能又有新的排進來
             bool more;
             lock (queueLock) more = queue.Count > 0;
             if (more && !crashed && !stop.IsCancellationRequested) StartPump();
@@ -663,7 +632,7 @@ public sealed class Plugin : IDalamudPlugin
             var detail = $"{DescribeHttpStatus(code)}{ServerError(text)}";
             if (code == 429) return new SendResult(SendOutcome.RateLimited, response.Headers.RetryAfter?.Delta, detail);
             if (code >= 500 || code == 408) return new SendResult(SendOutcome.Retryable, null, detail);
-            return new SendResult(SendOutcome.Permanent, null, detail); // 400／413／422／404…：重送也不會成功
+            return new SendResult(SendOutcome.Permanent, null, detail);
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
@@ -671,7 +640,7 @@ public sealed class Plugin : IDalamudPlugin
         }
         catch (Exception ex)
         {
-            // 網路錯誤、連不上、逾時（HttpClient 逾時是 TaskCanceledException，但不是我們取消的）
+            // 網路錯誤或逾時
             return new SendResult(SendOutcome.Retryable, null, ex.Message);
         }
     }
@@ -709,7 +678,7 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
-    /// <summary>伺服器錯誤回應是 {"ok":false,"error":"..."}；取出 error 給狀態畫面看，解析不了就不顯示。</summary>
+    /// <summary>取出伺服器回應裡的 error 訊息，取不到就回空字串。</summary>
     private static string ServerError(string responseText)
     {
         try
@@ -722,14 +691,14 @@ public sealed class Plugin : IDalamudPlugin
         }
         catch
         {
-            // 不是 JSON（例如代理伺服器的錯誤頁），略過
+            // 不是 JSON 就略過
         }
         return "";
     }
 
     // ---------- 本機除錯檔 ----------
 
-    /// <summary>封包裡只有物品編號。名稱向遊戲客戶端自己的資料表查（繁中版客戶端就是繁中名稱），僅供核對。</summary>
+    /// <summary>向遊戲資料表查物品名稱，只給本機除錯檔用。</summary>
     private object? ItemInfo(uint itemId)
     {
         try

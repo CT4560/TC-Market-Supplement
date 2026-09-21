@@ -1,14 +1,13 @@
 import { TW_WORLDS } from "./worlds.js";
 import type { StoredEntry, StoredListing, StoredSale } from "./store.js";
 
-// 把資料庫裡的資料轉成 Universalis v2 的回應格式（欄位名與結構相同，時間一律 UTC 毫秒）。
-// 全部是純函式，不碰 HTTP 也不碰資料庫，方便逐項測試。
+// 把資料轉成 Universalis v2 的回應格式（時間為 UTC 毫秒）。純函式，不碰 HTTP 與資料庫。
 
 export const DC_NAME = "陸行鳥";
 export const DC_REGION = "繁中服";
 export const DAY_MS = 86_400_000;
 export const DEFAULT_STATS_WITHIN_MS = 7 * DAY_MS;
-/** 公開 API 查詢的時間窗上限：30 天。資料庫其實保留一年的成交（store.ts），目前只開放最近 30 天給 API。 */
+/** API 查詢的時間窗上限。資料庫保留一年的成交，API 目前只開放最近 30 天。 */
 export const MAX_WINDOW_MS = 30 * DAY_MS;
 
 export type Json = Record<string, unknown>;
@@ -22,7 +21,6 @@ export type WorldTarget =
   | { kind: "world"; world: WorldRef }
   | { kind: "dc"; name: string; worlds: WorldRef[] };
 
-/** 網址裡的 {world}：世界編號、世界名稱，或資料中心名稱。認不得回 null。 */
 export function resolveWorld(param: string): WorldTarget | null {
   const trimmed = param.trim();
   if (trimmed === DC_NAME) return { kind: "dc", name: DC_NAME, worlds: TW_WORLDS.map((world) => ({ id: world.id, name: world.name })) };
@@ -34,7 +32,7 @@ export function resolveWorld(param: string): WorldTarget | null {
 
 // ---------- 掛單與成交的格式 ----------
 
-/** Universalis 的掛單物件。我們沒有收集的欄位保留鍵、給中性值（見 README）。 */
+/** 掛單物件。沒收集的欄位保留鍵並給中性值。 */
 export function formatListing(listing: StoredListing, world?: WorldRef): Json {
   const out: Json = {
     lastReviewTime: listing.firstSeenAt,
@@ -63,7 +61,6 @@ export function formatListing(listing: StoredListing, world?: WorldRef): Json {
   });
 }
 
-/** 目前資料裡的 recentHistory 項目（帶 total）。 */
 export function formatRecentSale(sale: StoredSale, world?: WorldRef): Json {
   const out: Json = {
     hq: false,
@@ -81,7 +78,6 @@ export function formatRecentSale(sale: StoredSale, world?: WorldRef): Json {
   return out;
 }
 
-/** /history 端點的 entries 項目（Universalis 這裡沒有 total，欄位順序也不同）。 */
 export function formatHistoryEntry(sale: StoredSale, world?: WorldRef): Json {
   const out: Json = {
     hq: false,
@@ -111,7 +107,6 @@ function histogram(quantities: number[]): Record<string, number> {
 }
 
 export interface StatsResult {
-  /** 依 Universalis 的欄位順序排好，可直接展開進回應。 */
   fields: Json;
   listingsCount: number;
   recentHistoryCount: number;
@@ -120,12 +115,8 @@ export interface StatsResult {
 }
 
 /**
- * 統計。listings 是目前的掛單（已篩過 HQ）、sales 是統計時間窗內的成交（已篩過 HQ）。
- * 染劑沒有 HQ，所以所有物品都算 NQ，HQ 的數字都是 0／空。
- *   min／max／currentAverage：目前掛單單價的最小／最大／平均
- *   averagePrice：時間窗內成交單價的平均
- *   *SaleVelocity：時間窗內賣出的數量 ÷ 時間窗的天數
- *   unitsForSale／unitsSold：掛單／成交的數量總和；stackSizeHistogram：{每筆的數量: 出現次數}
+ * 統計：min／max／currentAverage 看目前掛單，averagePrice 與 SaleVelocity 看時間窗內的成交。
+ * 染劑沒有 HQ，所以 HQ 的數字都是 0 或空。
  */
 export function computeStats(listings: StoredListing[], sales: StoredSale[], statsWithinMs: number): StatsResult {
   const listingPrices = listings.map((listing) => listing.pricePerUnit);
@@ -171,23 +162,19 @@ export function computeStats(listings: StoredListing[], sales: StoredSale[], sta
 export interface WorldData {
   world: WorldRef;
   entry: StoredEntry | undefined;
-  /** 這個世界這個物品的成交，新到舊（最多保留期內）。 */
   sales: StoredSale[];
 }
 
 export interface ViewOptions {
-  /** 回傳幾筆掛單，undefined＝全部。 */
   listings?: number;
-  /** 回傳幾筆成交。 */
   entries: number;
-  /** true＝只要 HQ、false＝只要 NQ、undefined＝不篩。 */
+  /** true 只要 HQ、false 只要 NQ、不給就不篩。 */
   hq?: boolean;
   statsWithinMs: number;
   entriesWithinMs?: number;
 }
 
 function hasHqFilterMismatch(hq: boolean | undefined): boolean {
-  // 我們的資料全是 NQ：hq=true 什麼都沒有
   return hq === true;
 }
 
@@ -217,7 +204,6 @@ function lastUpload(data: WorldData[]): number {
   return data.reduce((latest, item) => Math.max(latest, item.entry?.uploadedAt ?? 0), 0);
 }
 
-/** 單一世界、單一物品的目前資料（Universalis 的 /api/v2/{world}/{item}）。 */
 export function buildWorldItem(itemId: number, data: WorldData, options: ViewOptions, now: number): Json {
   const { listings, sales, statsSales, entrySales } = collect([data], options, now);
   const stats = computeStats(listings.map((row) => row.listing), statsSales.map((row) => row.sale), options.statsWithinMs);
@@ -239,7 +225,6 @@ export function buildWorldItem(itemId: number, data: WorldData, options: ViewOpt
   };
 }
 
-/** 整個資料中心（所有世界合併）的目前資料；每筆掛單與成交都帶 worldID／worldName。 */
 export function buildDcItem(itemId: number, dcName: string, data: WorldData[], options: ViewOptions, now: number): Json {
   const { listings, sales, statsSales, entrySales } = collect(data, options, now);
   const stats = computeStats(listings.map((row) => row.listing), statsSales.map((row) => row.sale), options.statsWithinMs);
@@ -271,7 +256,6 @@ export interface HistoryOptions {
   maxSalePrice?: number;
 }
 
-/** 成交歷史（Universalis 的 /api/v2/history/{world}/{item}）；world 為 undefined 時是資料中心版。 */
 export function buildHistory(itemId: number, target: WorldTarget, data: WorldData[], options: HistoryOptions, now: number): Json {
   const withinPrice = (sale: StoredSale) =>
     (options.minSalePrice === undefined || sale.pricePerUnit >= options.minSalePrice) &&
@@ -321,7 +305,6 @@ export function buildHistory(itemId: number, target: WorldTarget, data: WorldDat
 
 // ---------- fields 欄位投影（Universalis 的 ?fields=a.b,c） ----------
 
-/** 解析 fields 參數成「路徑陣列」。空字串或全空白回 null（＝不投影）。 */
 export function parseFields(param: string | null): string[][] | null {
   if (param === null) return null;
   const paths = param
@@ -334,10 +317,7 @@ export function parseFields(param: string | null): string[][] | null {
   return paths;
 }
 
-/**
- * 依路徑挑出欄位。遇到陣列就對每個元素套用；`items` 是「物品編號 → 物品資料」的字典，
- * 路徑 `items.listings.pricePerUnit` 表示對字典裡每個物品取 listings.pricePerUnit。
- */
+/** 依路徑挑出欄位；遇到陣列逐一套用，items 是物品編號到資料的字典，路徑會套用到每個物品。 */
 export function projectFields(source: unknown, paths: string[][]): unknown {
   if (Array.isArray(source)) return source.map((element) => projectFields(element, paths));
   if (source === null || typeof source !== "object") return source;
@@ -355,7 +335,7 @@ export function projectFields(source: unknown, paths: string[][]): unknown {
     if (!(key in record)) continue;
     const value = record[key];
     if (rests.some((rest) => rest.length === 0)) {
-      out[key] = value; // 整個子樹都要
+      out[key] = value;
     } else if (key === "items" && value !== null && typeof value === "object" && !Array.isArray(value)) {
       out[key] = Object.fromEntries(Object.entries(value as Json).map(([id, item]) => [id, projectFields(item, rests)]));
     } else {

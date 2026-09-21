@@ -1,9 +1,6 @@
-# 社群回報伺服器的容器設定。用法（在 server 資料夾）：
-#   docker compose up -d --build
-#
-# 只綁 127.0.0.1:8787：不直接對外，由同一台機器上的反向代理或 Cloudflare Tunnel 連進來
-# （限流靠 CF-Connecting-IP 判斷來源 IP，見 README）。
-# 明確指定專案名稱：跟同一台機器上其他 compose 專案（資料夾名稱可能相同）的容器與資料卷完全分開。
+# 用法：docker compose up -d --build
+# 埠只綁 127.0.0.1，由同一台機器上的反向代理或 Cloudflare Tunnel 連進來。
+# 明確指定專案名稱，避免跟同一台機器上的其他 compose 專案混在一起。
 name: database-dalamud-collector
 
 services:
@@ -13,17 +10,15 @@ services:
     restart: unless-stopped
     init: true
     environment:
-      # 上傳端點的總開關；這個服務的用途就是收上傳，所以容器裡打開。
       COMMUNITY_UPLOAD_ENABLED: "on"
-      # 公開讀取 API（/api/v2）與 WebSocket（/api/ws）的總開關。
       COMMUNITY_API_ENABLED: "on"
     ports:
-      # 主機端的埠可用環境變數 COLLECTOR_PORT 改（同一台機器上 8787 已被別的服務佔用時，例如在 .env 寫 COLLECTOR_PORT=8788）。
+      # 主機端的埠可用 COLLECTOR_PORT 調整（預設 8787）
       - "127.0.0.1:${COLLECTOR_PORT:-8787}:8787"
     volumes:
-      # 資料庫 collector.db（SQLite，WAL 模式）放在這個具名資料卷；備份請備份整個資料卷。
+      # 資料庫放在具名資料卷，備份請備份整個資料卷
       - collector-data:/data
-    # 收緊權限：唯讀根檔案系統（只有 /data 與 /tmp 可寫）、丟掉所有 Linux capability、不允許提權。
+    # 唯讀根檔案系統、丟掉所有 capability、禁止提權
     read_only: true
     tmpfs:
       - /tmp

@@ -1,23 +1,14 @@
 import { TW_WORLDS } from "./worlds.js";
 import { SALES_RETENTION_MS, type CollectorStore, type StoredListing, type StoredSale } from "./store.js";
 
-// 社群回報：繁中服可交易、但 Universalis 沒有價格資料的物品（例如 7.5 整併前的舊染劑）
-// 沒有任何官方來源，價格只能靠玩家在遊戲裡掃描市場板、用外掛回報。
-//
-// 上傳是公開匿名的（跟 Universalis 自己的上傳器同一種模型）：不驗證身份，靠三道防線擋濫用——
-//   1. 只接受物品白名單（data/items.json）裡的物品：Universalis 有資料的物品絕對不會被社群回報覆蓋。
-//   2. 逐項檢查資料合理性（世界、價格、數量、掃描時間窗、單次筆數、自由文字欄位），單筆爛資料略過或整批拒絕。
-//   3. 依來源 IP 限流（UploadRateLimiter），外掛出錯或有人狂送時不會打爆資料庫。
-/** 公開上傳端點的總開關：環境變數 COMMUNITY_UPLOAD_ENABLED=on 才開，沒設或其他值＝端點不存在（回 404）。 */
+// 接收外掛上傳的掛單與成交。上傳公開匿名，靠三道檢查擋濫用：
+// 物品白名單（data/items.json）、逐項資料檢查、依來源 IP 限流。
+/** COMMUNITY_UPLOAD_ENABLED=on 才開放上傳端點。 */
 export function isCommunityUploadEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.COMMUNITY_UPLOAD_ENABLED?.trim().toLowerCase() === "on";
 }
 
-/**
- * 取得請求的來源 IP，給限流用。服務只綁 127.0.0.1、由 Cloudflare Tunnel 轉進來，
- * TCP 層看到的永遠是本機，所以優先讀 Cloudflare 加的 CF-Connecting-IP；本機測試或直連時退回
- * X-Forwarded-For 第一段，最後才是連線位址。
- */
+/** 來源 IP：服務在 Cloudflare Tunnel 後面，優先讀 CF-Connecting-IP，其次 X-Forwarded-For，最後才是連線位址。 */
 export function getClientIp(req: { headers: Record<string, string | string[] | undefined>; socket?: { remoteAddress?: string } }): string {
   const first = (value: string | string[] | undefined): string | undefined => {
     const text = Array.isArray(value) ? value[0] : value;
@@ -36,40 +27,31 @@ export function getClientIp(req: { headers: Record<string, string | string[] | u
 export const MAX_LISTINGS_PER_UPLOAD = 100;
 export const MAX_SALES_PER_UPLOAD = 50;
 export const MAX_UPLOAD_BODY_BYTES = 64 * 1024;
-/** 跟 Universalis 上傳檢查用的單價上限一致。 */
+/** 單價上限，跟 Universalis 一致。 */
 const MAX_PRICE = 999_999_999;
-/**
- * 單筆數量上限。Universalis 用「該物品實際疊加上限」；我們只收固定的舊染劑，
- * 使用者確認單一掛單（一個雇員賣的一格）數量最大 99，超過的一定是假資料。
- */
+/** 單筆掛單的數量上限，市場板一格最多 99。 */
 export const MAX_QUANTITY = 99;
-/** 掃描時間不能比現在早超過這麼久（外掛是掃描當下就上傳），也不能在未來。 */
+/** 掃描時間不能早於這麼久，也不能在未來。 */
 const MAX_CAPTURE_AGE_MS = 15 * 60_000;
 const MAX_CAPTURE_FUTURE_MS = 2 * 60_000;
-/** 每個世界每個物品存整份掛單（上限同單次上傳）：統計與資料中心合併都需要完整清單。 */
+/** 每個世界每個物品存整份掛單。 */
 const STORED_LISTINGS_LIMIT = MAX_LISTINGS_PER_UPLOAD;
-/** 雇員名稱的長度上限（遊戲內雇員名稱遠短於這個數字）。 */
 const MAX_NAME_LENGTH = 40;
-/** 買家（角色）名稱：繁中服的姓與名加起來最多 6 個字（不含中間的空白）。 */
+/** 買家名稱最多 6 個字（姓名加起來，不含空白）。 */
 export const MAX_BUYER_NAME_CHARS = 6;
 
 export interface UploadListing {
   pricePerUnit: number;
   quantity: number;
   retainerName: string;
-  /**
-   * 遊戲給這筆掛單的唯一編號。封包裡沒有真正的上架時間，伺服器用它記住「第一次被看到的時間」：
-   * 同一個編號再次掃描到，時間維持不變；新的編號用這次掃描時間。沒帶編號的就一律用掃描時間。
-   */
+  /** 遊戲給的掛單編號，伺服器用它記住這筆掛單第一次被看到的時間。 */
   listingId?: string;
 }
 
 export interface UploadSale {
   pricePerUnit: number;
   quantity: number;
-  /** 買家名稱（市場板成交紀錄上本來就公開顯示的角色名稱）；沒有就是空字串。 */
   buyerName: string;
-  /** 毫秒 */
   timestamp: number;
 }
 
@@ -79,7 +61,7 @@ export interface NormalizedUpload {
   capturedAt: number;
   listings: UploadListing[];
   sales: UploadSale[];
-  /** 被略過（沒有整包拒絕）的項目數，只給 log 診斷用。 */
+  /** 被略過的項目數，只給 log 用。 */
   skipped: { staleSales: number; badNameSales: number; badNameListings: number };
 }
 
@@ -87,7 +69,6 @@ export type ValidationResult = { ok: true; value: NormalizedUpload } | { ok: fal
 
 export interface ValidationContext {
   now: number;
-  /** 這個物品在不在白名單裡（只有白名單內的物品才接受社群回報）。 */
   isAcceptedItem: (itemId: number) => boolean;
 }
 
@@ -125,7 +106,7 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
     if (!isInt(raw.pricePerUnit, 1, MAX_PRICE)) return fail("invalid listing price");
     if (!isInt(raw.quantity, 1, MAX_QUANTITY)) return fail("invalid listing quantity");
 
-    // 遊戲給的掛單編號是 64 位元整數，JSON 數字會失真，所以一律用十進位字串傳。
+    // 掛單編號是 64 位元整數，用十進位字串傳
     let listingId: string | undefined;
     if (raw.listingId !== undefined && raw.listingId !== null) {
       if (typeof raw.listingId !== "string" || !/^\d{1,20}$/.test(raw.listingId)) return fail("invalid listingId");
@@ -133,8 +114,7 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
     }
 
     const retainerName = typeof raw.retainerName === "string" ? raw.retainerName.slice(0, MAX_NAME_LENGTH) : "-";
-    // 雇員名稱是遊戲內的自由文字，正常不會有角括號；Universalis 遇到 HTML 標籤會拒絕上傳。
-    // 這裡沿用「單筆略過、不整包打回」的作法（跟太舊的成交一樣），不影響同一批其他合法資料。
+    // 雇員名稱含角括號就略過這一筆
     if (/[<>]/.test(retainerName)) {
       skipped.badNameListings++;
       continue;
@@ -157,10 +137,10 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
     if (raw.timestamp > capturedAt + MAX_CAPTURE_FUTURE_MS) return fail("sale timestamp is in the future");
     const buyerName = typeof raw.buyerName === "string" ? raw.buyerName.trim() : "";
     if (context.now - raw.timestamp > SALES_RETENTION_MS) {
-      skipped.staleSales++; // 太舊的成交不收（會被清掉），略過而不是整筆拒絕
+      skipped.staleSales++;
       continue;
     }
-    // 名稱不合理（超過 6 個字，或像 HTML 標籤）的成交整筆略過，不影響同一批其他合法資料；不截斷，避免存進錯的名字。
+    // 名稱不合理的成交略過（不截斷，免得存到錯的名字）
     if (Array.from(buyerName.replace(/\s/g, "")).length > MAX_BUYER_NAME_CHARS || /[<>]/.test(buyerName)) {
       skipped.badNameSales++;
       continue;
@@ -172,42 +152,33 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
   return { ok: true, value: { worldId: input.worldId, itemId: input.itemId, capturedAt, listings, sales, skipped } };
 }
 
-/** 這次上傳造成的變動，給即時推播用（不是上傳者要看的內容）。 */
+/** 這次上傳造成的變動，給即時推播用。 */
 export interface UploadChanges {
   worldId: number;
   itemId: number;
-  /** 新出現的掛單（以掛單編號比對；沒有編號的用價格＋數量＋雇員）。 */
   addedListings: StoredListing[];
-  /** 這次掃描已經不在的掛單。 */
   removedListings: StoredListing[];
-  /** 真的新寫入的成交。 */
   newSales: StoredSale[];
 }
 
 export interface ApplyResult {
   listingsStored: number;
   salesInserted: number;
-  /** 已經有比這次擷取更新的掛單資料（別的上傳者、或這份上傳是延遲送達的舊資料），這次的掛單沒有寫入。 */
+  /** 已有更新的掃描，這次的掛單沒寫入。 */
   listingsIgnored?: boolean;
   changes: UploadChanges;
 }
 
-/** 比對新舊掛單用的鍵：有掛單編號就用編號，否則用內容。 */
 export function listingKey(listing: StoredListing): string {
   return listing.listingId ? "id:" + listing.listingId : ["c", listing.pricePerUnit, listing.quantity, listing.retainerName].join("|");
 }
 
-/**
- * 寫入資料庫。掛單整份取代這個世界這個物品目前的內容（外掛送的是掃描當下的完整清單）；
- * 空清單也照寫，代表「掃描時沒有人在賣」。
- */
+/** 寫入資料庫。掛單整份取代，空清單代表掃描時沒人在賣。 */
 export function applyUpload(store: CollectorStore, upload: NormalizedUpload, now: number = Date.now()): ApplyResult {
-  // 封包裡沒有真正的上架時間（Universalis 自己的上傳器也是填「現在」）。做法：記住每筆掛單「第一次被
-  // 看到的時間」，用遊戲給的掛單編號比對。同一筆再被掃描到，時間維持不變；新的編號用這次掃描時間。
+  // 用掛單編號記住每筆掛單第一次被看到的時間
   const existing = store.getEntry(upload.worldId, upload.itemId);
 
-  // 多人上傳時，較舊的擷取不能蓋掉較新的（延遲送達、或兩個人先後掃同一個物品）。成交紀錄仍照收，
-  // 那是歷史資料，重複的會被唯一索引擋掉。
+  // 較舊的掃描不能蓋掉較新的，成交仍照收
   const listingsIgnored = existing !== undefined && existing.uploadedAt > upload.capturedAt;
 
   const firstSeen = new Map<string, number>();
@@ -232,7 +203,6 @@ export function applyUpload(store: CollectorStore, upload: NormalizedUpload, now
 
   if (!listingsIgnored) store.setEntry(upload.worldId, upload.itemId, stored, upload.capturedAt);
 
-  // 新舊掛單的差異（較舊的擷取被忽略時沒有變動）。
   let addedListings: StoredListing[] = [];
   let removedListings: StoredListing[] = [];
   if (!listingsIgnored) {
@@ -248,7 +218,6 @@ export function applyUpload(store: CollectorStore, upload: NormalizedUpload, now
     buyerName: sale.buyerName,
     saleTimestamp: sale.timestamp,
   }));
-  // 重複上傳會被唯一索引擋掉（買家名稱也是索引的一部分，沒有名稱存空字串）。
   const newSales = sales.length > 0 ? store.insertSales(upload.worldId, upload.itemId, sales, now, now) : [];
   const salesInserted = newSales.length;
   const changes: UploadChanges = { worldId: upload.worldId, itemId: upload.itemId, addedListings, removedListings, newSales };
@@ -258,10 +227,7 @@ export function applyUpload(store: CollectorStore, upload: NormalizedUpload, now
     : { listingsStored: stored.length, salesInserted, changes };
 }
 
-/**
- * 每個來源 IP 每秒最多 4 次上傳（間隔限流：距離該 IP 上次被允許不到 250ms 就拒絕，呼叫端回 429）。
- * 手動點市場板不可能這麼快，外掛出錯或有人狂送則會被擋；只記每個 IP 上次被允許的時間，記憶體很小。
- */
+/** 每個來源 IP 每秒最多 4 次上傳（距上次被允許不到 250ms 就拒絕）。 */
 export class UploadRateLimiter {
   private lastAllowedAt = new Map<string, number>();
 
@@ -280,7 +246,6 @@ export class UploadRateLimiter {
     return true;
   }
 
-  /** 超過一分鐘沒動靜的 IP 不需要再記，避免 Map 無限成長（公開端點會看到各種來源）。 */
   private prune(current: number): void {
     if (this.lastAllowedAt.size < 1000) return;
     for (const [ip, at] of this.lastAllowedAt) {

@@ -1,16 +1,8 @@
 #!/usr/bin/env bash
-# 備份檔的保留規則。由 backup.sh 在每次備份之後呼叫，也可以單獨執行。
-#
-#   每日備份       全部保留最近 KEEP_DAILY_DAYS 天（預設 60），更舊的刪掉。
-#   兩個月一組     一年分成六組：1～2 月、3～4 月、5～6 月、7～8 月、9～10 月、11～12 月（UTC）。
-#                  一組結束之後，把那一組「最後一份」備份封存到 archive/ 資料夾。
-#   封存備份       保留 KEEP_ARCHIVE_DAYS 天（預設 365），也就是最多約 6 份；更舊的刪掉。
-#
-# 只動備份檔，不碰資料庫。先封存、再刪除每日備份，所以封存用的那一份不會在封存前被刪掉。
-#
-# 環境變數：BACKUP_DIR（預設 /root/backups/collector）、KEEP_DAILY_DAYS、KEEP_ARCHIVE_DAYS、
-# ROTATE_NOW（測試用，指定「今天」，格式 YYYY-MM-DD）。
-# 檔名格式：collector-YYYYmmdd-HHMMSSZ.db.gz（每日）、archive/collector-YYYY-MM_MM-YYYYmmdd-HHMMSSZ.db.gz（封存）。
+# 備份保留規則，由 backup.sh 在備份後呼叫：
+#   每日備份留最近 KEEP_DAILY_DAYS 天（預設 60）。
+#   一年分六組（1～2 月、3～4 月……11～12 月，UTC），每組結束後把該組最後一份封存到 archive/，留 KEEP_ARCHIVE_DAYS 天（預設 365）。
+# 只動備份檔。環境變數：BACKUP_DIR、KEEP_DAILY_DAYS、KEEP_ARCHIVE_DAYS、ROTATE_NOW（測試用，YYYY-MM-DD）。
 
 set -euo pipefail
 
@@ -27,7 +19,7 @@ log() {
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >> "$LOG"
 }
 
-# 日期（YYYYmmdd）→ 兩個月一組的名稱，例如 20260921 → 2026-09_10、20260305 → 2026-03_04
+# 20260921 → 2026-09_10
 group_label() {
   local ymd="$1"
   local year="${ymd:0:4}"
@@ -38,10 +30,10 @@ group_label() {
 
 current_label="$(group_label "$(date -u -d "$TODAY" +%Y%m%d)")"
 
-# ---- 1. 封存：已經結束的每一組，把該組最後一份備份留下來 ----
+# 封存已結束的組別的最後一份備份
 declare -A newest_of_group=()
 shopt -s nullglob
-for file in "$BACKUP_DIR"/collector-2*.db.gz; do   # 檔名字典序＝時間序，後面的會蓋掉前面的
+for file in "$BACKUP_DIR"/collector-2*.db.gz; do
   base="${file##*/}"
   stamp="${base#collector-}"
   label="$(group_label "${stamp:0:8}")"
@@ -49,9 +41,9 @@ for file in "$BACKUP_DIR"/collector-2*.db.gz; do   # 檔名字典序＝時間序
 done
 
 for label in "${!newest_of_group[@]}"; do
-  [ "$label" = "$current_label" ] && continue        # 這一組還沒結束
+  [ "$label" = "$current_label" ] && continue
   existing=("$ARCHIVE_DIR"/collector-"$label"-*.db.gz)
-  [ "${#existing[@]}" -gt 0 ] && continue             # 已經封存過
+  [ "${#existing[@]}" -gt 0 ] && continue
   source_file="${newest_of_group[$label]}"
   source_base="${source_file##*/}"
   target="$ARCHIVE_DIR/collector-$label-${source_base#collector-}"
@@ -59,7 +51,7 @@ for label in "${!newest_of_group[@]}"; do
   log "sealed $source_base as archive/${target##*/}"
 done
 
-# ---- 2. 刪掉超過保留天數的每日備份 ----
+# 刪除過期的每日備份
 daily_cutoff="$(date -u -d "$TODAY -$KEEP_DAILY_DAYS days" +%Y%m%d)"
 for file in "$BACKUP_DIR"/collector-2*.db.gz; do
   stamp="${file##*/}"
@@ -70,12 +62,12 @@ for file in "$BACKUP_DIR"/collector-2*.db.gz; do
   fi
 done
 
-# ---- 3. 刪掉超過保留天數的封存備份（依備份當天的日期，檔名裡的最後一段） ----
+# 刪除過期的封存備份
 archive_cutoff="$(date -u -d "$TODAY -$KEEP_ARCHIVE_DAYS days" +%Y%m%d)"
 for file in "$ARCHIVE_DIR"/collector-*.db.gz; do
   name="${file##*/}"
-  rest="${name#collector-}"           # 2026-09_10-20261031-200000Z.db.gz
-  backup_date="${rest:11:8}"          # 標籤 10 個字元＋一個連字號之後就是備份日期
+  rest="${name#collector-}"
+  backup_date="${rest:11:8}"
   if [[ "$backup_date" < "$archive_cutoff" ]]; then
     rm -f "$file"
     log "removed old archived backup archive/$name"
