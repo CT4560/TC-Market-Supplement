@@ -23,6 +23,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 # 物品白名單放在映像檔裡，資料庫在 /data 資料卷
 COPY data/items.json ./data/items.json
+# 開發者文件網站（/docs/）
+COPY site ./site
 
 RUN mkdir -p /data && chown node:node /data
 USER node

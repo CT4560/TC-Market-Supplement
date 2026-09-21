@@ -8,6 +8,7 @@
 - `GET /community/items`：告訴外掛哪些物品、哪些世界接受回報（外掛啟動時問，約每 30 分鐘更新）。
 - `GET /api/v2/…`：公開讀取 API（見下方「公開 API」）。
 - `wss://…/api/ws`：即時推播（見下方「WebSocket」）。
+- `GET /docs/`：給開發者的文件與測試網站 TC-Market Supplement（見下方「文件網站」）。
 - `GET /health`：存活與資料庫檢查。
 
 ## 公開 API（`/api/v2`）
@@ -111,9 +112,14 @@ npm run build && COMMUNITY_UPLOAD_ENABLED=on COMMUNITY_API_ENABLED=on npm start
 | `DATA_DIR` | `./data` | 資料庫所在資料夾（檔名 `collector.db`） |
 | `ITEMS_FILE` | `./data/items.json` | 物品白名單 |
 | `COMMUNITY_UPLOAD_ENABLED` | （未設＝關） | 設成 `on` 才開放上傳端點 |
-| `COMMUNITY_API_ENABLED` | （未設＝關） | 設成 `on` 才開放公開 REST API 與 WebSocket |
+| `COMMUNITY_API_ENABLED` | （未設＝關） | 設成 `on` 才開放公開 REST API、WebSocket 與文件網站 |
+| `SITE_DIR` | `./site` | 文件網站的檔案資料夾；不存在就沒有 `/docs/` |
 
 開發時 `npm run dev` 會監看檔案變更重啟。
+
+## 文件網站（`/docs/`）
+
+在網域後面加 `/docs/` 是給開發者看的文件與測試網站：REST 端點說明與可直接送出的試用表單、WebSocket 訂閱測試（頁面自己編解碼 BSON）、以及能看掛單與成交的資料檢視。網站是 `site/` 裡的純 HTML／JS／CSS，沒有建置步驟也不載入外部資源，啟動時整個讀進記憶體；限制的數字與物品名稱由伺服器的 `/docs/config.json`、`/docs/items.json` 提供，所以永遠跟程式裡的常數一致。頁面帶嚴格的內容安全政策。
 
 ## 用 Docker 執行
 

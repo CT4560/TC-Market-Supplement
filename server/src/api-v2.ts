@@ -23,6 +23,10 @@ import {
 
 // 公開讀取 API，路徑與欄位相容 Universalis v2，時間一律是 UTC 毫秒。不需要金鑰，靠每個 IP 的限流擋濫用。
 
+/** 讀取 API 的限流：每個 IP 每秒補 20 個名額、最多 40 個。 */
+export const API_RATE_PER_SECOND = 20;
+export const API_RATE_BURST = 40;
+
 /** 單次請求最多的物品數（＝白名單物品數）。 */
 export const MAX_ITEMS_PER_REQUEST = 112;
 /** 每 10 個物品算一次名額，查全部 112 個算 12 次。 */
@@ -31,8 +35,8 @@ export const ITEMS_PER_TOKEN = 10;
 export function requestCost(itemCount: number): number {
   return Math.max(1, Math.ceil(itemCount / ITEMS_PER_TOKEN));
 }
-const MAX_ENTRIES = 1800;
-const DEFAULT_RECENT_ENTRIES = 5;
+export const MAX_ENTRIES = 1800;
+export const DEFAULT_RECENT_ENTRIES = 5;
 const DEFAULT_MOST_RECENT = 50;
 const MAX_MOST_RECENT = 200;
 const CACHE_CONTROL = "public, max-age=10";

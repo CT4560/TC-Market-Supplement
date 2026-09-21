@@ -44,4 +44,4 @@ FFXIV 繁中服的 Dalamud 外掛。你在市場板查看物品時，它會把�
 
 ## 資料的用途
 
-回報的資料由公開的 API 提供給任何人使用，格式與 Universalis 相同，說明在 [server/README.md](server/README.md)。開發外掛的相關說明在 [DEVELOPMENT.md](DEVELOPMENT.md)。
+回報的資料由公開的 API 提供給任何人使用，格式與 Universalis 相同，說明在 [server/README.md](server/README.md)；伺服器網域後面加 `/docs/` 有可以直接試用的開發者文件網站（TC-Market Supplement）。開發外掛的相關說明在 [DEVELOPMENT.md](DEVELOPMENT.md)。

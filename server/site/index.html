@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TC-Market Supplement</title>
+  <meta name="description" content="繁中服 Universalis 沒有資料的物品（舊染劑等）的社群回報市場資料，提供公開的 REST API 與 WebSocket。">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <img src="logo.png" alt="" width="40" height="40">
+      <span>TC-Market Supplement</span>
+    </a>
+    <nav class="nav" aria-label="主選單">
+      <a href="#/" data-route="">概覽</a>
+      <a href="#/rest" data-route="rest">REST API</a>
+      <a href="#/websocket" data-route="websocket">WebSocket</a>
+      <a href="#/explorer" data-route="explorer">資料檢視</a>
+      <a href="#/notes" data-route="notes">說明</a>
+    </nav>
+  </header>
+
+  <main id="app" class="page">
+    <p class="muted">載入中…</p>
+  </main>
+
+  <footer class="footer">
+    <p>資料由玩家使用 Market Board Collector 外掛在市場板查價時順便回報，不是即時資料。</p>
+  </footer>
+
+  <noscript>這個網站需要啟用 JavaScript。API 本身不需要，文件見 /api/v2/worlds 等端點。</noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

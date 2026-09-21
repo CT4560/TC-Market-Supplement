@@ -51,6 +51,7 @@ function prepareStatements(db: Database.Database) {
     deleteOldSales: db.prepare(`DELETE FROM sales WHERE saleTimestamp < ?`),
     countSales: db.prepare(`SELECT COUNT(*) AS n FROM sales`),
     itemIds: db.prepare(`SELECT id FROM items ORDER BY id`),
+    listItems: db.prepare(`SELECT id, name, name_en FROM items ORDER BY id`),
     hasItem: db.prepare(`SELECT 1 FROM items WHERE id = ?`),
     deleteItems: db.prepare(`DELETE FROM items`),
     insertItem: db.prepare(`INSERT INTO items (id, name, name_en) VALUES (@id, @name, @nameEn)`),
@@ -118,6 +119,10 @@ export class CollectorStore {
   }
 
   isAcceptedItem = (itemId: number): boolean => this.stmts.hasItem.get(itemId) !== undefined;
+
+  listItems(): CollectorItem[] {
+    return (this.stmts.listItems.all() as Array<{ id: number; name: string; name_en: string | null }>).map((row) => ({ id: row.id, name: row.name, nameEn: row.name_en }));
+  }
 
   itemIds(): number[] {
     return (this.stmts.itemIds.all() as Array<{ id: number }>).map((row) => row.id);

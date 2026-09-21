@@ -10,18 +10,17 @@ import {
 } from "./community.js";
 import type { CollectorStore } from "./store.js";
 import { TokenBucketLimiter } from "./rate-limit.js";
-import { handleApiV2, isApiV2Path, isCommunityApiEnabled } from "./api-v2.js";
+import { API_RATE_BURST, API_RATE_PER_SECOND, handleApiV2, isApiV2Path, isCommunityApiEnabled } from "./api-v2.js";
+import { isDocsPath, loadDocsSite } from "./docs-site.js";
 import { WS_PATH, WsHub } from "./ws-hub.js";
-
-/** 讀取 API 的限流：每個 IP 每秒補 20 個名額、最多 40 個。 */
-export const API_RATE_PER_SECOND = 20;
-export const API_RATE_BURST = 40;
 
 export interface AppOptions {
   store: CollectorStore;
   rateLimiter?: UploadRateLimiter;
   apiLimiter?: TokenBucketLimiter;
   hub?: WsHub;
+  /** 文件網站（/docs/）的檔案資料夾；沒給或資料夾不存在就沒有這個網站。 */
+  siteDir?: string;
   env?: NodeJS.ProcessEnv;
   now?: () => number;
   log?: (message: string) => void;
@@ -69,7 +68,7 @@ function readBodyWithLimit(req: http.IncomingMessage, maxBytes: number): Promise
 
 /**
  * 建立 HTTP 伺服器（不 listen，方便測試）。端點：/health、/community/items、/community/upload、/api/v2/*、/api/ws。
- * COMMUNITY_UPLOAD_ENABLED、COMMUNITY_API_ENABLED 沒設成 on 時，對應的端點回 404。
+ * COMMUNITY_UPLOAD_ENABLED、COMMUNITY_API_ENABLED 沒設成 on 時，對應的端點回 404。/docs/ 是文件網站，跟讀取 API 同一個開關。
  */
 export function createApp(options: AppOptions): http.Server {
   const { store } = options;
@@ -79,6 +78,7 @@ export function createApp(options: AppOptions): http.Server {
   const rateLimiter = options.rateLimiter ?? new UploadRateLimiter();
   const apiLimiter = options.apiLimiter ?? new TokenBucketLimiter(API_RATE_PER_SECOND, API_RATE_BURST);
   const hub = options.hub ?? new WsHub();
+  const docs = options.siteDir ? loadDocsSite(options.siteDir, store) : null;
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -91,6 +91,15 @@ export function createApp(options: AppOptions): http.Server {
         } catch {
           sendJson(res, 503, { ok: false, error: "database unavailable" });
         }
+        return;
+      }
+
+      if (isDocsPath(url.pathname)) {
+        if (!docs || !isCommunityApiEnabled(env)) {
+          sendJson(res, 404, { ok: false, error: "not found" });
+          return;
+        }
+        docs.handle(req, res, url);
         return;
       }
 

@@ -8,11 +8,14 @@ import { openStore, type CollectorItem } from "./store.js";
 //   HOST                       監聽位址，預設 127.0.0.1（只給同一台機器上的反向代理／Cloudflare Tunnel 連；容器內請設 0.0.0.0）
 //   DATA_DIR                   資料庫所在資料夾，預設 ./data（資料庫檔名 collector.db）
 //   ITEMS_FILE                 物品白名單，預設 ./data/items.json（scripts/build-items.mjs 產生）
+//   SITE_DIR                   文件網站（/docs/）的檔案，預設 ./site
 //   COMMUNITY_UPLOAD_ENABLED   設成 on 才開放上傳端點，沒設＝端點回 404
+//   COMMUNITY_API_ENABLED      設成 on 才開放公開 API、WebSocket 與文件網站
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
 const dataDir = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
 const itemsFile = process.env.ITEMS_FILE ?? path.join(process.cwd(), "data", "items.json");
+const siteDir = process.env.SITE_DIR ?? path.join(process.cwd(), "site");
 
 fs.mkdirSync(dataDir, { recursive: true });
 const store = openStore(path.join(dataDir, "collector.db"));
@@ -24,7 +27,7 @@ if (!Array.isArray(items.items) || items.items.length === 0) {
 store.replaceItems(items.items);
 console.log(`[collector] item whitelist: ${items.items.length} items`);
 
-const server = createApp({ store });
+const server = createApp({ store, siteDir });
 server.listen(port, host, () => console.log(`[collector] listening on ${host}:${port}`));
 
 // 每小時清一次過期的成交
