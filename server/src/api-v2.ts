@@ -26,6 +26,13 @@ import {
 
 /** 單次請求最多幾個物品（＝白名單物品總數，一次可以查全部）。 */
 export const MAX_ITEMS_PER_REQUEST = 112;
+/** 每多少個物品算一次請求的名額：查 1～10 個物品算 1 次，一次查全部 112 個算 12 次（回應大小約跟物品數成正比）。 */
+export const ITEMS_PER_TOKEN = 10;
+
+/** 一個查物品的請求要用掉幾個名額。 */
+export function requestCost(itemCount: number): number {
+  return Math.max(1, Math.ceil(itemCount / ITEMS_PER_TOKEN));
+}
 const MAX_ENTRIES = 1800;
 const DEFAULT_RECENT_ENTRIES = 5;
 const DEFAULT_MOST_RECENT = 50;
@@ -134,11 +141,7 @@ export function handleApiV2(req: http.IncomingMessage, res: http.ServerResponse,
   }
 
   const taken = ctx.limiter.take(clientIp);
-  if (!taken.allowed) {
-    const seconds = Math.max(1, Math.ceil(taken.retryAfterMs / 1000));
-    problem(res, 429, "Too Many Requests", "Rate limit exceeded; slow down.", { "retry-after": String(seconds) });
-    return;
-  }
+  if (!taken.allowed) return tooManyRequests(res, taken.retryAfterMs);
 
   if (req.method !== "GET" && req.method !== "HEAD") {
     problem(res, 405, "Method Not Allowed", undefined, { allow: "GET, HEAD, OPTIONS" });
@@ -176,22 +179,23 @@ export function handleApiV2(req: http.IncomingMessage, res: http.ServerResponse,
     return;
   }
   if (segments.length === 3 && segments[0] === "history") {
-    handleHistory(res, url, segments[1], segments[2], ctx, now);
+    handleHistory(res, url, segments[1], segments[2], ctx, now, clientIp);
     return;
   }
   if (segments.length === 2 && segments[0] !== "history" && segments[0] !== "extra") {
-    handleCurrent(res, url, segments[0], segments[1], ctx, now);
+    handleCurrent(res, url, segments[0], segments[1], ctx, now, clientIp);
     return;
   }
 
   problem(res, 404, "Not Found");
 }
 
-function handleCurrent(res: http.ServerResponse, url: URL, worldParam: string, itemParam: string, ctx: ApiContext, now: number): void {
+function handleCurrent(res: http.ServerResponse, url: URL, worldParam: string, itemParam: string, ctx: ApiContext, now: number, clientIp: string): void {
   const target = resolveWorld(worldParam);
   if (!target) return problem(res, 404, "Not Found", "Unknown world or data center.");
   const itemIds = parseItemIds(itemParam);
   if (!itemIds) return problem(res, 400, "Bad Request", `itemIds must be 1-${MAX_ITEMS_PER_REQUEST} comma-separated numbers.`);
+  if (!chargeForItems(res, ctx, clientIp, itemIds.length)) return;
 
   const params = url.searchParams;
   const listings = intParam(params, "listings", 0, 1000);
@@ -235,11 +239,12 @@ function handleCurrent(res: http.ServerResponse, url: URL, worldParam: string, i
   send(res, 200, fields.paths ? projectFields(body, fields.paths) : body, { "cache-control": CACHE_CONTROL });
 }
 
-function handleHistory(res: http.ServerResponse, url: URL, worldParam: string, itemParam: string, ctx: ApiContext, now: number): void {
+function handleHistory(res: http.ServerResponse, url: URL, worldParam: string, itemParam: string, ctx: ApiContext, now: number, clientIp: string): void {
   const target = resolveWorld(worldParam);
   if (!target) return problem(res, 404, "Not Found", "Unknown world or data center.");
   const itemIds = parseItemIds(itemParam);
   if (!itemIds) return problem(res, 400, "Bad Request", `itemIds must be 1-${MAX_ITEMS_PER_REQUEST} comma-separated numbers.`);
+  if (!chargeForItems(res, ctx, clientIp, itemIds.length)) return;
 
   const params = url.searchParams;
   const entries = intParam(params, "entries", 0, MAX_ENTRIES);
@@ -281,6 +286,21 @@ function handleHistory(res: http.ServerResponse, url: URL, worldParam: string, i
   }
 
   send(res, 200, fields.paths ? projectFields(body, fields.paths) : body, { "cache-control": CACHE_CONTROL });
+}
+
+function tooManyRequests(res: http.ServerResponse, retryAfterMs: number): void {
+  const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+  problem(res, 429, "Too Many Requests", "Rate limit exceeded; slow down.", { "retry-after": String(seconds) });
+}
+
+/** 查很多物品的請求要多收名額（已經收過 1 個）。不夠就回 429 並回傳 false。 */
+function chargeForItems(res: http.ServerResponse, ctx: ApiContext, clientIp: string, itemCount: number): boolean {
+  const extra = requestCost(itemCount) - 1;
+  if (extra <= 0) return true;
+  const taken = ctx.limiter.take(clientIp, extra);
+  if (taken.allowed) return true;
+  tooManyRequests(res, taken.retryAfterMs);
+  return false;
 }
 
 function handleMostRecent(res: http.ServerResponse, url: URL, ctx: ApiContext): void {

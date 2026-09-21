@@ -43,7 +43,7 @@ curl "https://api-ffxiv-bot.epicurean-expedition.com/api/v2/陸行鳥/5729,5730?
 
 ### 限流
 
-每個來源 IP：**每秒 20 次、突發 40**（Universalis 是 25／50），超過回 `429` 與 `Retry-After`（秒）。回應帶 `Cache-Control: public, max-age=10`，前面放 CDN 的話可以快取。
+每個來源 IP：**每秒補 20 個名額、最多存 40 個**（Universalis 是每秒 25、突發 50），一個請求用 1 個，超過回 `429` 與 `Retry-After`（秒）。**查很多物品的請求多扣名額，每 10 個物品算 1 個**：查 1～10 個物品算 1 次，一次查全部 112 個算 12 次，因為回應大小大致跟物品數成正比（全部 112 個約 90 KB）。回應帶 `Cache-Control: public, max-age=10`，前面放 CDN 的話可以快取（見下方「Cloudflare 快取」）。
 
 ## WebSocket 即時推播（`/api/ws`）
 
@@ -121,7 +121,17 @@ curl http://127.0.0.1:8787/health
 - 備份：`scripts/backup.sh` 用 SQLite 的 backup API 複製資料庫（服務執行中也安全）、驗證完整性、壓縮成 `collector-<UTC 時間>.db.gz`，預設放 `/root/backups/collector`、保留 14 天（可用 `BACKUP_DIR`、`KEEP_DAYS`、`VOLUME` 環境變數調整）。用 cron 每天跑一次，例如 `10 20 * * * /opt/database-dalamud-collector/scripts/backup.sh`。備份和資料庫在同一台機器，防得了誤刪與資料損壞，防不了整台機器遺失，重要的話請另外把備份檔複製到別處。還原步驟寫在腳本檔頭。
 - 容器以唯讀根檔案系統、丟掉所有 capability、禁止提權、記憶體上限 384 MB 執行。
 - 物品白名單 `data/items.json` 打包在映像檔裡；要更新清單就重新執行 `npm run build-items`、再重新建置映像檔。
-- 建議在 Cloudflare 加一條 Cache Rule：對 `/api/v2/*`（不含 `/api/ws`）快取 10 秒，可以大幅減少回到源站的流量。
+- 建議設定 Cloudflare 快取，見下一節。
+
+## Cloudflare 快取（建議）
+
+Cloudflare 預設**不會**快取 JSON（回應會顯示 `cf-cache-status: DYNAMIC`），要自己加一條 Cache Rule，相同網址的重複請求才會由 Cloudflare 邊緣直接回，不用回到這台伺服器（也不佔用這裡的限流名額）。在 Cloudflare 後台選這個網域 → **Caching → Cache Rules → Create rule**：
+
+- **When incoming requests match**：自訂篩選，`URI Path` **starts with** `/api/v2/`（不要包含 `/api/ws`，WebSocket 不能快取；上傳 `/community/*` 也不要）。
+- **Then**：Cache eligibility 選 **Eligible for cache**；Edge TTL 選 **Ignore cache-control header and use this TTL**，填 **10 seconds**（或選 Use cache-control header if present，伺服器已經回 `Cache-Control: public, max-age=10`）。
+- Cache key 維持預設（含查詢字串，不同參數會分開快取）。
+
+快取只擋「完全相同網址」的重複請求；有人每次加不同的查詢字串來繞過快取時，靠上面依物品數加權的限流擋住。
 
 ## 測試
 

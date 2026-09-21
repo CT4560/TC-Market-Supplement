@@ -17,6 +17,19 @@ describe("TokenBucketLimiter", () => {
     assert.equal(limiter.take("a").allowed, false);
   });
 
+  test("一次可以扣多個名額；不夠就拒絕，Retry-After 依缺的量算", () => {
+    let t = 0;
+    const limiter = new TokenBucketLimiter(20, 40, () => t);
+    assert.equal(limiter.take("a", 12).allowed, true);
+    assert.equal(limiter.take("a", 12).allowed, true);
+    assert.equal(limiter.take("a", 12).allowed, true); // 用掉 36，剩 4
+    const blocked = limiter.take("a", 12);
+    assert.equal(blocked.allowed, false);
+    assert.equal(blocked.retryAfterMs, 400, "缺 8 個、每秒補 20 個 → 400ms");
+    t += 400;
+    assert.equal(limiter.take("a", 12).allowed, true);
+  });
+
   test("補名額不超過上限；不同 key 互不影響", () => {
     let t = 0;
     const limiter = new TokenBucketLimiter(20, 40, () => t);

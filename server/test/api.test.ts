@@ -9,7 +9,7 @@ import { CollectorStore } from "../src/store.js";
 import { createApp } from "../src/server.js";
 import { applyUpload, validateUpload } from "../src/community.js";
 import { TokenBucketLimiter } from "../src/rate-limit.js";
-import { MAX_ITEMS_PER_REQUEST } from "../src/api-v2.js";
+import { ITEMS_PER_TOKEN, MAX_ITEMS_PER_REQUEST, requestCost } from "../src/api-v2.js";
 
 const shapes = JSON.parse(readFileSync(new URL("./fixtures/universalis-shapes.json", import.meta.url), "utf8")) as Record<string, string[]>;
 
@@ -225,6 +225,25 @@ describe("公開讀取 API（/api/v2）", () => {
     const post = await fetch(`${base}/api/v2/worlds`, { method: "POST", headers: { "cf-connecting-ip": ip() } });
     assert.equal(post.status, 405);
     assert.equal((await get(`/api/v2/nothing/here/at/all`)).status, 404);
+  });
+
+  test("查很多物品要多扣名額：每 10 個物品算 1 次，查全部 112 個算 12 次", async () => {
+    assert.equal(ITEMS_PER_TOKEN, 10);
+    assert.deepEqual([1, 10, 11, 20, 21, 112].map(requestCost), [1, 1, 2, 2, 3, 12]);
+
+    const heavy = { "cf-connecting-ip": "203.0.113.90" };
+    const all = Array.from({ length: 112 }, (_, i) => 5000 + i).join(",");
+    const statuses: number[] = [];
+    for (let i = 0; i < 4; i++) statuses.push((await fetch(`${base}/api/v2/${BAHAMUT}/${all}`, { headers: heavy })).status);
+    assert.deepEqual(statuses, [200, 200, 200, 429], "突發 40：3 次 × 12 ＝ 36，第 4 次不夠");
+
+    const limited = await fetch(`${base}/api/v2/${BAHAMUT}/${all}`, { headers: heavy });
+    assert.equal(limited.status, 429);
+    assert.ok(Number(limited.headers.get("retry-after")) >= 1);
+
+    // 同一個 IP 還有名額時，查 1 個物品照樣可以
+    assert.equal((await fetch(`${base}/api/v2/${BAHAMUT}/${ITEM}`, { headers: heavy })).status, 200);
+    assert.equal((await fetch(`${base}/api/v2/history/${BAHAMUT}/${all}`, { headers: { "cf-connecting-ip": "203.0.113.91" } })).status, 200);
   });
 
   test("限流：每個 IP 突發 40、每秒補 20；超過回 429＋Retry-After；不同 IP 互不影響", async () => {
