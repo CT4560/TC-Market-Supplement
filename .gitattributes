@@ -1,3 +1,4 @@
 # 腳本一律用 LF（在 Linux 上執行；Windows 的自動換行轉換會讓 bash 出錯）
 *.sh text eol=lf
 Dockerfile text eol=lf
+*.bat text eol=crlf

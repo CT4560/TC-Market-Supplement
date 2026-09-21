@@ -19,7 +19,7 @@ public sealed class ConfigWindow : Window
     private string feedback = "";
     private bool feedbackIsError;
 
-    public ConfigWindow(Plugin plugin) : base("Market Board Collector 設定###MarketBoardCollectorConfig")
+    public ConfigWindow(Plugin plugin) : base("FFXIV-TW-Market-Data-Supplement 設定###MarketBoardCollectorConfig")
     {
         this.plugin = plugin;
         Size = new Vector2(560, 470);

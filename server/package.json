@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Market Board Collector 的社群回報伺服器：接收插件的匿名上傳，存進自己的 SQLite。",
+  "description": "FFXIV-TW-Market-Data-Supplement 的社群回報伺服器：接收插件的匿名上傳，存進自己的 SQLite。",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",

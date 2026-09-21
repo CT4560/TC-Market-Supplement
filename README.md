@@ -1,6 +1,6 @@
 # FFXIV-TW-Market-Data-Supplement
 
-FFXIV 繁中服的市場資料補充專案。這個專案的 Dalamud 插件 Market Board Collector 會在你查看市場板時，把繁中服上 Universalis 沒有價格資料的物品（主要是舊染劑與色素）的掛單和成交紀錄，匿名回報給社群伺服器，讓大家有地方查得到這些價格。
+FFXIV 繁中服的市場資料補充專案。這個專案的 Dalamud 插件 FFXIV-TW-Market-Data-Supplement 會在你查看市場板時，把繁中服上 Universalis 沒有價格資料的物品（主要是舊染劑與色素）的掛單和成交紀錄，匿名回報給社群伺服器，讓大家有地方查得到這些價格。
 
 你不需要另外做任何事，平常怎麼用市場板就怎麼用。
 
@@ -20,13 +20,24 @@ FFXIV 繁中服的市場資料補充專案。這個專案的 Dalamud 插件 Mark
 
 需要台灣服啟動器（XIVLauncher TC）自帶的 Dalamud。
 
-### 從自訂儲存庫安裝
+### 快速安裝（建議）
+
+1. 下載 `install.bat`（下載連結會在發佈後補在這裡）。
+2. 完全關閉遊戲與啟動器。
+3. 雙擊 `install.bat`。如果 Windows 跳出安全性警告，選「其他資訊」再按「仍要執行」。
+4. 出現「完成」後啟動遊戲，輸入 `/xlplugins`，搜尋 FFXIV-TW-Market-Data-Supplement 並安裝。
+
+`install.bat` 是純文字檔，可以用記事本打開檢查。它只做一件事：把本插件的儲存庫網址加進台灣服 Dalamud 的設定檔（改之前會先備份原檔，備份在同一個資料夾），不會下載也不會安裝任何東西。找不到設定檔、遊戲還開著或設定檔有問題時，它會說明原因並且不改任何檔案。
+
+之後有新版本，會直接出現在 `/xlplugins` 的更新清單裡。
+
+### 自己加入儲存庫
+
+不想用 `install.bat` 的話，可以在遊戲裡手動加：
 
 1. 遊戲內輸入 `/xlsettings`，打開「試驗性功能」分頁。
-2. 在「第三方外掛程式倉庫」貼上儲存庫網址並加入，按儲存。
-3. 輸入 `/xlplugins`，搜尋 Market Board Collector 並安裝。
-
-儲存庫網址會在發佈後補在這裡。
+2. 在「第三方外掛程式倉庫」貼上儲存庫網址並加入，按儲存。儲存庫網址與 `install.bat` 裡的一樣，會在發佈後補在這裡。
+3. 輸入 `/xlplugins`，搜尋 FFXIV-TW-Market-Data-Supplement 並安裝。
 
 ### 手動安裝
 

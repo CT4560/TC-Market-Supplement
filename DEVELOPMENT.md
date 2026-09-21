@@ -6,6 +6,7 @@
 - `UploadQueue.cs`：上傳佇列、重試退避、內容去重。不依賴 Dalamud。
 - `ConfigWindow.cs`、`CollectorStatus.cs`、`CollectorConfig.cs`：設定視窗、狀態統計、設定檔。
 - `tests/UploadQueue.Tests`：`UploadQueue.cs` 的測試。
+- `install.bat`：給玩家的快速安裝檔，把儲存庫網址加進台灣服 Dalamud 的設定檔。
 - `server/`：接收上傳與提供公開 API 的伺服器，見 [server/README.md](server/README.md)。
 
 ## 掃描與上傳
@@ -61,3 +62,9 @@ $env:MBCOLLECTOR_ENDPOINT = 'http://127.0.0.1:8787'
 - 拿不到每筆掛單真正的上架時間（Dalamud 的 `LastReviewTime` 沒有被填值），所以插件不送這個欄位，伺服器用第一次看到這筆掛單的時間代替。
 - 完全沒有掛單也沒有成交紀錄的物品，遊戲不會送任何封包，所以不會有回報。
 - 插件只讀你目前所在的世界；要回報其他世界，要到那個世界的市場板查看。
+
+## install.bat
+
+批次檔上半段只負責呼叫 PowerShell，`#PS_BEGIN` 之後才是實際的 PowerShell 程式（執行時由批次檔自己讀取、以 UTF-8 解碼），所以批次檔上半段必須維持純 ASCII，檔案用 CRLF（`.gitattributes` 已設定）。網址寫在檔案裡的 `$RepoUrl`，發佈儲存庫後把 `REPLACE_WITH_REPO_URL` 換成正式網址，並同步更新 `repo.json` 的佔位字串與 README。
+
+它直接用文字插入的方式改設定檔，不整份重新序列化，避免動到 Dalamud 其他設定的格式；寫入前會先驗證結果是有效的 JSON、且清單裡剛好有一筆這個網址。測試時可以設環境變數 `DALAMUD_CONFIG_PATH` 指向一份設定檔的複本，別拿真的設定檔試。
