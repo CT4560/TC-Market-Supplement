@@ -46,6 +46,20 @@ npm run build && COMMUNITY_UPLOAD_ENABLED=on npm start
 
 開發時 `npm run dev` 會監看檔案變更重啟。
 
+## 用 Docker 執行
+
+```bash
+cd server
+docker compose up -d --build
+curl http://127.0.0.1:8787/health
+```
+
+- `Dockerfile` 分兩階段：先編譯 TypeScript，執行階段只帶正式環境的相依套件與編譯結果，以非 root 的 `node` 使用者執行，內建健康檢查（打 `/health`）。
+- `docker-compose.yml` 只把埠綁在 `127.0.0.1:8787`，不直接對外；請用同一台機器上的反向代理或 Cloudflare Tunnel 連進來（限流靠 `CF-Connecting-IP` 判斷來源 IP）。
+- 資料庫放在具名資料卷 `collector-data`（容器內 `/data/collector.db`）。備份請備份整個資料卷（SQLite 是 WAL 模式，會有 `-wal`、`-shm` 檔）。
+- 容器以唯讀根檔案系統、丟掉所有 capability、禁止提權、記憶體上限 256 MB 執行。
+- 物品白名單 `data/items.json` 打包在映像檔裡；要更新清單就重新執行 `npm run build-items`、再重新建置映像檔。
+
 ## 測試
 
 ```bash
@@ -57,4 +71,4 @@ npm test
 ## 尚未做
 
 - 讀取端（公開的 REST／WebSocket 供其他工具查詢社群價格）——之後另外設計。
-- Dockerfile／部署設定——部署方式（獨立 docker 或獨立 VPS）尚未決定。
+- 實際部署：部署位置（獨立 docker 或獨立 VPS）與正式網址尚未決定；下面的 Docker 設定只做過本機檢查，還沒有在正式環境跑過。

@@ -1,0 +1,31 @@
+# 社群回報伺服器的容器設定。用法（在 server 資料夾）：
+#   docker compose up -d --build
+#
+# 只綁 127.0.0.1:8787：不直接對外，由同一台機器上的反向代理或 Cloudflare Tunnel 連進來
+# （限流靠 CF-Connecting-IP 判斷來源 IP，見 README）。
+services:
+  collector:
+    build: .
+    image: database-dalamud-collector-server
+    restart: unless-stopped
+    init: true
+    environment:
+      # 上傳端點的總開關；這個服務的用途就是收上傳，所以容器裡打開。
+      COMMUNITY_UPLOAD_ENABLED: "on"
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      # 資料庫 collector.db（SQLite，WAL 模式）放在這個具名資料卷；備份請備份整個資料卷。
+      - collector-data:/data
+    # 收緊權限：唯讀根檔案系統（只有 /data 與 /tmp 可寫）、丟掉所有 Linux capability、不允許提權。
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+
+volumes:
+  collector-data:

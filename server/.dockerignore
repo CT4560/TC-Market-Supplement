@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.gitignore
+Dockerfile
+.dockerignore
+docker-compose.yml
+README.md
+test
+scripts
+# 本機測試用的資料庫不要打包進映像檔（items.json 要保留）
+data/*.db
+data/*.db-*
+npm-debug.log*
