@@ -1,6 +1,6 @@
-# Market Board Collector
+# FFXIV-TW-Market-Data-Supplement
 
-FFXIV 繁中服的 Dalamud 插件。你在市場板查看物品時，它會把繁中服上 Universalis 沒有價格資料的物品（主要是舊染劑與色素）的掛單和成交紀錄，匿名回報給社群伺服器，讓大家有地方查得到這些價格。
+FFXIV 繁中服的市場資料補充專案。這個專案的 Dalamud 插件 Market Board Collector 會在你查看市場板時，把繁中服上 Universalis 沒有價格資料的物品（主要是舊染劑與色素）的掛單和成交紀錄，匿名回報給社群伺服器，讓大家有地方查得到這些價格。
 
 你不需要另外做任何事，平常怎麼用市場板就怎麼用。
 
