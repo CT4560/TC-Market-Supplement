@@ -3,6 +3,9 @@
 #
 # 只綁 127.0.0.1:8787：不直接對外，由同一台機器上的反向代理或 Cloudflare Tunnel 連進來
 # （限流靠 CF-Connecting-IP 判斷來源 IP，見 README）。
+# 明確指定專案名稱：跟同一台機器上其他 compose 專案（資料夾名稱可能相同）的容器與資料卷完全分開。
+name: database-dalamud-collector
+
 services:
   collector:
     build: .
@@ -13,7 +16,8 @@ services:
       # 上傳端點的總開關；這個服務的用途就是收上傳，所以容器裡打開。
       COMMUNITY_UPLOAD_ENABLED: "on"
     ports:
-      - "127.0.0.1:8787:8787"
+      # 主機端的埠可用環境變數 COLLECTOR_PORT 改（同一台機器上 8787 已被別的服務佔用時，例如在 .env 寫 COLLECTOR_PORT=8788）。
+      - "127.0.0.1:${COLLECTOR_PORT:-8787}:8787"
     volumes:
       # 資料庫 collector.db（SQLite，WAL 模式）放在這個具名資料卷；備份請備份整個資料卷。
       - collector-data:/data
