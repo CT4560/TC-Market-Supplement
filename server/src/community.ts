@@ -49,8 +49,10 @@ const MAX_CAPTURE_FUTURE_MS = 2 * 60_000;
 const SALES_RETENTION_MS = 30 * 86_400_000;
 /** 資料庫每個世界每個物品只留最低價的前幾筆，跟其他資料來源一致。 */
 const STORED_LISTINGS_LIMIT = 10;
-/** 雇員名稱、買家名稱的長度上限（遊戲內角色名稱遠短於這個數字）。 */
+/** 雇員名稱的長度上限（遊戲內雇員名稱遠短於這個數字）。 */
 const MAX_NAME_LENGTH = 40;
+/** 買家（角色）名稱：繁中服的姓與名加起來最多 6 個字（不含中間的空白）。 */
+export const MAX_BUYER_NAME_CHARS = 6;
 
 export interface UploadListing {
   pricePerUnit: number;
@@ -148,8 +150,9 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
     if (!isInt(raw.quantity, 1, MAX_QUANTITY)) return fail("invalid sale quantity");
     if (!isInt(raw.timestamp, 1, Number.MAX_SAFE_INTEGER)) return fail("invalid sale timestamp");
     if (raw.timestamp > capturedAt + MAX_CAPTURE_FUTURE_MS) return fail("sale timestamp is in the future");
-    const buyerName = typeof raw.buyerName === "string" ? raw.buyerName.trim().slice(0, MAX_NAME_LENGTH) : "";
-    if (/[<>]/.test(buyerName)) continue; // 跟雇員名稱一樣：像 HTML 標籤的整筆略過
+    const buyerName = typeof raw.buyerName === "string" ? raw.buyerName.trim() : "";
+    // 名稱不合理（超過 6 個字，或像 HTML 標籤）的成交整筆略過，不影響同一批其他合法資料；不截斷，避免存進錯的名字。
+    if (Array.from(buyerName.replace(/\s/g, "")).length > MAX_BUYER_NAME_CHARS || /[<>]/.test(buyerName)) continue;
     if (context.now - raw.timestamp > SALES_RETENTION_MS) continue; // 太舊的成交不收（會被清掉），略過而不是整筆拒絕
 
     sales.push({ pricePerUnit: raw.pricePerUnit, quantity: raw.quantity, buyerName, timestamp: raw.timestamp });

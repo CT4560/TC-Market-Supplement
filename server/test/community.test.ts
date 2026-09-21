@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import { TW_WORLDS } from "../src/worlds.js";
 import { CollectorStore } from "../src/store.js";
 import {
+  MAX_BUYER_NAME_CHARS,
   MAX_QUANTITY,
   UploadRateLimiter,
   applyUpload,
@@ -132,7 +133,8 @@ describe("上傳資料驗證", () => {
     assert.ok(!validateUpload(upload({ listings: "nope" }), ctx).ok);
   });
 
-  test("成交的買家名稱：整理成字串（沒帶就是空字串）、截到 40 字、含角括號的成交略過", () => {
+  test("成交的買家名稱：整理成字串（沒帶就是空字串）、姓名加起來最多 6 字（不含空白）、超過或含角括號的成交略過", () => {
+    assert.equal(MAX_BUYER_NAME_CHARS, 6);
     const result = validateUpload(
       upload({
         sales: [
@@ -140,14 +142,17 @@ describe("上傳資料驗證", () => {
           { pricePerUnit: 6, quantity: 1, timestamp: NOW - 2000 },
           { pricePerUnit: 7, quantity: 1, timestamp: NOW - 3000, buyerName: 12345 },
           { pricePerUnit: 8, quantity: 1, timestamp: NOW - 4000, buyerName: "<b>壞人</b>" },
-          { pricePerUnit: 9, quantity: 1, timestamp: NOW - 5000, buyerName: "長".repeat(60) },
+          { pricePerUnit: 9, quantity: 1, timestamp: NOW - 5000, buyerName: "長".repeat(7) },
+          { pricePerUnit: 10, quantity: 1, timestamp: NOW - 6000, buyerName: "一二三 四五六" },
+          { pricePerUnit: 11, quantity: 1, timestamp: NOW - 7000, buyerName: "一二三 四五六七" },
+          { pricePerUnit: 12, quantity: 1, timestamp: NOW - 8000, buyerName: "長".repeat(6) },
         ],
       }),
       ctx,
     );
     assert.ok(result.ok);
-    assert.deepEqual(result.value.sales.map((sale) => sale.pricePerUnit), [5, 6, 7, 9]);
-    assert.deepEqual(result.value.sales.map((sale) => sale.buyerName), ["買家甲", "", "", "長".repeat(40)]);
+    assert.deepEqual(result.value.sales.map((sale) => sale.pricePerUnit), [5, 6, 7, 10, 12]);
+    assert.deepEqual(result.value.sales.map((sale) => sale.buyerName), ["買家甲", "", "", "一二三 四五六", "長".repeat(6)]);
   });
 
   test("成交：太舊的略過（不整筆拒絕）、在未來的拒絕", () => {

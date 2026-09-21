@@ -24,6 +24,20 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown): void
   res.end(JSON.stringify(body));
 }
 
+/**
+ * 回完 413 之後把剩下的內容丟掉，但最多再收 budgetBytes 就直接斷線，不讓對方一直灌流量進來。
+ * 不能一開始就 destroy：連線一斷，對方就收不到 413 了；先讓回應送出去，超過額度才斷。
+ */
+function discardRest(req: http.IncomingMessage, budgetBytes: number): void {
+  let discarded = 0;
+  req.removeAllListeners("data");
+  req.on("data", (chunk: Buffer) => {
+    discarded += chunk.length;
+    if (discarded > budgetBytes) req.destroy();
+  });
+  req.resume();
+}
+
 function readBodyWithLimit(req: http.IncomingMessage, maxBytes: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -32,10 +46,9 @@ function readBodyWithLimit(req: http.IncomingMessage, maxBytes: number): Promise
       total += chunk.length;
       if (total > maxBytes) {
         reject(new Error("body too large"));
-        // 不能在這裡 destroy 連線：連線一斷，呼叫端就回不出 413 了。停止累積內容、把剩下的丟掉，讓呼叫端先回應。
+        // 停止累積內容，讓呼叫端先回 413；剩下的內容有額度地丟掉（見 discardRest）。
         chunks.length = 0;
-        req.removeAllListeners("data");
-        req.resume();
+        discardRest(req, maxBytes * 4);
         return;
       }
       chunks.push(chunk);
@@ -96,10 +109,21 @@ export function createApp(options: AppOptions): http.Server {
           return;
         }
 
+        // 標頭宣告的大小就已經超過上限：不必讀內容，直接回 413 並關閉連線，省下這份流量。
+        const declaredBytes = Number(req.headers["content-length"]);
+        if (Number.isFinite(declaredBytes) && declaredBytes > MAX_UPLOAD_BODY_BYTES) {
+          res.setHeader("connection", "close");
+          sendJson(res, 413, { ok: false, error: "body too large" });
+          discardRest(req, MAX_UPLOAD_BODY_BYTES * 4);
+          return;
+        }
+
         let raw: string;
         try {
           raw = await readBodyWithLimit(req, MAX_UPLOAD_BODY_BYTES);
         } catch {
+          // 沒有宣告大小（分塊傳送）卻超過上限：一樣回 413 並關閉連線。
+          res.setHeader("connection", "close");
           sendJson(res, 413, { ok: false, error: "body too large" });
           return;
         }

@@ -1,7 +1,7 @@
 import { describe, test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
-import type http from "node:http";
+import http from "node:http";
 import Database from "better-sqlite3";
 import { TW_WORLDS } from "../src/worlds.js";
 import { CollectorStore } from "../src/store.js";
@@ -72,6 +72,26 @@ describe("HTTP 端點", () => {
     assert.equal((await post(fromNewIp(), body({ itemId: 1001 }))).status, 422);
     assert.equal((await post(fromNewIp(), body({ capturedAt: Date.now() - 3_600_000 }))).status, 400);
     assert.equal((await post(fromNewIp(), JSON.stringify({ pad: "x".repeat(70_000) }))).status, 413);
+  });
+
+  test("標頭宣告的內容大小超過上限：不等內容送完就直接回 413", async () => {
+    const status = await new Promise<number>((resolve, reject) => {
+      const url = new URL(`${base}/community/upload`);
+      const request = http.request(
+        { hostname: url.hostname, port: url.port, path: url.pathname, method: "POST", headers: { ...fromNewIp(), "content-length": "10000000" } },
+        (response) => {
+          response.resume();
+          resolve(response.statusCode ?? 0);
+          request.destroy();
+        },
+      );
+      request.on("error", (error) => {
+        // 回應已經拿到之後我們自己 destroy 造成的錯誤不算
+        if (!(error as NodeJS.ErrnoException).code?.startsWith("ECONN")) reject(error);
+      });
+      request.write("x".repeat(1000)); // 只送一點點，宣告的 10 MB 根本沒有送
+    });
+    assert.equal(status, 413);
   });
 
   test("同一個 IP 太快回 429；不同 IP 不受影響", async () => {
