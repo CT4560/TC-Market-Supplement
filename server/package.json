@@ -1,0 +1,23 @@
+{
+  "name": "database-dalamud-collector-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Market Board Collector 的社群回報伺服器：接收外掛的匿名上傳，存進自己的 SQLite。",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "dev": "tsx watch src/main.ts",
+    "test": "tsx --test test/*.test.ts",
+    "build-items": "node scripts/build-items.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.11.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

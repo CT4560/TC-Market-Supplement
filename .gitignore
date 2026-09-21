@@ -3,3 +3,8 @@ obj/
 *.user
 .vs/
 dist/
+
+server/node_modules/
+server/dist/
+server/data/*.db
+server/data/*.db-*

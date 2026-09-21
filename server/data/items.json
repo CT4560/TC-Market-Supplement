@@ -1,0 +1,566 @@
+{
+  "generatedAt": "2026-09-21T05:35:12.191Z",
+  "source": "thewakingsands/ffxiv-datamining-tc@e203c7e + Universalis marketable",
+  "items": [
+    {
+      "id": 5729,
+      "name": "素雪白染劑",
+      "nameEn": "Snow White Dye"
+    },
+    {
+      "id": 5730,
+      "name": "蒼白灰染劑",
+      "nameEn": "Ash Grey Dye"
+    },
+    {
+      "id": 5731,
+      "name": "古卜灰染劑",
+      "nameEn": "Goobbue Grey Dye"
+    },
+    {
+      "id": 5732,
+      "name": "石板灰染劑",
+      "nameEn": "Slate Grey Dye"
+    },
+    {
+      "id": 5733,
+      "name": "木炭灰染劑",
+      "nameEn": "Charcoal Grey Dye"
+    },
+    {
+      "id": 5734,
+      "name": "煤煙黑染劑",
+      "nameEn": "Soot Black Dye"
+    },
+    {
+      "id": 5735,
+      "name": "玫瑰粉染劑",
+      "nameEn": "Rose Pink Dye"
+    },
+    {
+      "id": 5736,
+      "name": "丁香紫染劑",
+      "nameEn": "Lilac Purple Dye"
+    },
+    {
+      "id": 5737,
+      "name": "羅蘭莓染劑",
+      "nameEn": "Rolanberry Red Dye"
+    },
+    {
+      "id": 5738,
+      "name": "衛月紅染劑",
+      "nameEn": "Dalamud Red Dye"
+    },
+    {
+      "id": 5739,
+      "name": "鐵鏽紅染劑",
+      "nameEn": "Rust Red Dye"
+    },
+    {
+      "id": 5740,
+      "name": "果酒紅染劑",
+      "nameEn": "Wine Red Dye"
+    },
+    {
+      "id": 5741,
+      "name": "珊瑚粉染劑",
+      "nameEn": "Coral Pink Dye"
+    },
+    {
+      "id": 5742,
+      "name": "鮮血紅染劑",
+      "nameEn": "Blood Red Dye"
+    },
+    {
+      "id": 5743,
+      "name": "鮭魚粉染劑",
+      "nameEn": "Salmon Pink Dye"
+    },
+    {
+      "id": 5744,
+      "name": "日落橙染劑",
+      "nameEn": "Sunset Orange Dye"
+    },
+    {
+      "id": 5745,
+      "name": "台地紅染劑",
+      "nameEn": "Mesa Red Dye"
+    },
+    {
+      "id": 5746,
+      "name": "樹皮棕染劑",
+      "nameEn": "Bark Brown Dye"
+    },
+    {
+      "id": 5747,
+      "name": "巧克力染劑",
+      "nameEn": "Chocolate Brown Dye"
+    },
+    {
+      "id": 5748,
+      "name": "鐵鏽棕染劑",
+      "nameEn": "Russet Brown Dye"
+    },
+    {
+      "id": 5749,
+      "name": "鈷鐵棕染劑",
+      "nameEn": "Kobold Brown Dye"
+    },
+    {
+      "id": 5750,
+      "name": "軟木棕染劑",
+      "nameEn": "Cork Brown Dye"
+    },
+    {
+      "id": 5751,
+      "name": "盧恩棕染劑",
+      "nameEn": "Qiqirn Brown Dye"
+    },
+    {
+      "id": 5752,
+      "name": "奧猴棕染劑",
+      "nameEn": "Opo-opo Brown Dye"
+    },
+    {
+      "id": 5753,
+      "name": "山羊棕染劑",
+      "nameEn": "Aldgoat Brown Dye"
+    },
+    {
+      "id": 5754,
+      "name": "南瓜橙染劑",
+      "nameEn": "Pumpkin Orange Dye"
+    },
+    {
+      "id": 5755,
+      "name": "橡果棕染劑",
+      "nameEn": "Acorn Brown Dye"
+    },
+    {
+      "id": 5756,
+      "name": "果園棕染劑",
+      "nameEn": "Orchard Brown Dye"
+    },
+    {
+      "id": 5757,
+      "name": "山栗棕染劑",
+      "nameEn": "Chestnut Brown Dye"
+    },
+    {
+      "id": 5758,
+      "name": "哥布林染劑",
+      "nameEn": "Gobbiebag Brown Dye"
+    },
+    {
+      "id": 5759,
+      "name": "葉岩棕染劑",
+      "nameEn": "Shale Brown Dye"
+    },
+    {
+      "id": 5760,
+      "name": "鼴鼠棕染劑",
+      "nameEn": "Mole Brown Dye"
+    },
+    {
+      "id": 5761,
+      "name": "沃土棕染劑",
+      "nameEn": "Loam Brown Dye"
+    },
+    {
+      "id": 5762,
+      "name": "骸骨白染劑",
+      "nameEn": "Bone White Dye"
+    },
+    {
+      "id": 5763,
+      "name": "黃沙棕染劑",
+      "nameEn": "Ul Brown Dye"
+    },
+    {
+      "id": 5764,
+      "name": "沙漠黃染劑",
+      "nameEn": "Desert Yellow Dye"
+    },
+    {
+      "id": 5765,
+      "name": "蜂蜜黃染劑",
+      "nameEn": "Honey Yellow Dye"
+    },
+    {
+      "id": 5766,
+      "name": "玉米黃染劑",
+      "nameEn": "Millioncorn Yellow Dye"
+    },
+    {
+      "id": 5767,
+      "name": "猛豹黃染劑",
+      "nameEn": "Coeurl Yellow Dye"
+    },
+    {
+      "id": 5768,
+      "name": "奶油黃染劑",
+      "nameEn": "Cream Yellow Dye"
+    },
+    {
+      "id": 5769,
+      "name": "日影黃染劑",
+      "nameEn": "Halatali Yellow Dye"
+    },
+    {
+      "id": 5770,
+      "name": "萄乾棕染劑",
+      "nameEn": "Raisin Brown Dye"
+    },
+    {
+      "id": 5771,
+      "name": "泥沼綠染劑",
+      "nameEn": "Mud Green Dye"
+    },
+    {
+      "id": 5772,
+      "name": "風精靈綠染劑",
+      "nameEn": "Sylph Green Dye"
+    },
+    {
+      "id": 5773,
+      "name": "青檸綠染劑",
+      "nameEn": "Lime Green Dye"
+    },
+    {
+      "id": 5774,
+      "name": "苔蘚綠染劑",
+      "nameEn": "Moss Green Dye"
+    },
+    {
+      "id": 5775,
+      "name": "牧草綠染劑",
+      "nameEn": "Meadow Green Dye"
+    },
+    {
+      "id": 5776,
+      "name": "橄欖綠染劑",
+      "nameEn": "Olive Green Dye"
+    },
+    {
+      "id": 5777,
+      "name": "沼澤綠染劑",
+      "nameEn": "Marsh Green Dye"
+    },
+    {
+      "id": 5778,
+      "name": "蘋果綠染劑",
+      "nameEn": "Apple Green Dye"
+    },
+    {
+      "id": 5779,
+      "name": "仙人掌怪染劑",
+      "nameEn": "Cactuar Green Dye"
+    },
+    {
+      "id": 5780,
+      "name": "獵人綠染劑",
+      "nameEn": "Hunter Green Dye"
+    },
+    {
+      "id": 5781,
+      "name": "腐獸綠染劑",
+      "nameEn": "Ochu Green Dye"
+    },
+    {
+      "id": 5782,
+      "name": "金龜綠染劑",
+      "nameEn": "Adamantoise Green Dye"
+    },
+    {
+      "id": 5783,
+      "name": "地神綠染劑",
+      "nameEn": "Nophica Green Dye"
+    },
+    {
+      "id": 5784,
+      "name": "深林綠染劑",
+      "nameEn": "Deepwood Green Dye"
+    },
+    {
+      "id": 5785,
+      "name": "天上藍染劑",
+      "nameEn": "Celeste Green Dye"
+    },
+    {
+      "id": 5786,
+      "name": "綠松藍染劑",
+      "nameEn": "Turquoise Green Dye"
+    },
+    {
+      "id": 5787,
+      "name": "魔花綠染劑",
+      "nameEn": "Morbol Green Dye"
+    },
+    {
+      "id": 5788,
+      "name": "寒冰藍染劑",
+      "nameEn": "Ice Blue Dye"
+    },
+    {
+      "id": 5789,
+      "name": "天空藍染劑",
+      "nameEn": "Sky Blue Dye"
+    },
+    {
+      "id": 5790,
+      "name": "海霧藍染劑",
+      "nameEn": "Seafog Blue Dye"
+    },
+    {
+      "id": 5791,
+      "name": "孔雀藍染劑",
+      "nameEn": "Peacock Blue Dye"
+    },
+    {
+      "id": 5792,
+      "name": "羅海藍染劑",
+      "nameEn": "Rhotano Blue Dye"
+    },
+    {
+      "id": 5793,
+      "name": "腐屍藍染劑",
+      "nameEn": "Corpse Blue Dye"
+    },
+    {
+      "id": 5794,
+      "name": "青磷藍染劑",
+      "nameEn": "Ceruleum Blue Dye"
+    },
+    {
+      "id": 5795,
+      "name": "靛青藍染劑",
+      "nameEn": "Woad Blue Dye"
+    },
+    {
+      "id": 5796,
+      "name": "油墨藍染劑",
+      "nameEn": "Ink Blue Dye"
+    },
+    {
+      "id": 5797,
+      "name": "盜龍藍染劑",
+      "nameEn": "Raptor Blue Dye"
+    },
+    {
+      "id": 5798,
+      "name": "東洲藍染劑",
+      "nameEn": "Othard Blue Dye"
+    },
+    {
+      "id": 5799,
+      "name": "風暴藍染劑",
+      "nameEn": "Storm Blue Dye"
+    },
+    {
+      "id": 5800,
+      "name": "虛空藍染劑",
+      "nameEn": "Void Blue Dye"
+    },
+    {
+      "id": 5801,
+      "name": "皇室藍染劑",
+      "nameEn": "Royal Blue Dye"
+    },
+    {
+      "id": 5802,
+      "name": "午夜藍染劑",
+      "nameEn": "Midnight Blue Dye"
+    },
+    {
+      "id": 5803,
+      "name": "陰影藍染劑",
+      "nameEn": "Shadow Blue Dye"
+    },
+    {
+      "id": 5804,
+      "name": "深淵藍染劑",
+      "nameEn": "Abyssal Blue Dye"
+    },
+    {
+      "id": 5805,
+      "name": "薰衣草染劑",
+      "nameEn": "Lavender Purple Dye"
+    },
+    {
+      "id": 5806,
+      "name": "憂鬱紫染劑",
+      "nameEn": "Gloom Purple Dye"
+    },
+    {
+      "id": 5807,
+      "name": "醋栗紫染劑",
+      "nameEn": "Currant Purple Dye"
+    },
+    {
+      "id": 5808,
+      "name": "鳶尾紫染劑",
+      "nameEn": "Iris Purple Dye"
+    },
+    {
+      "id": 5809,
+      "name": "葡萄紫染劑",
+      "nameEn": "Grape Purple Dye"
+    },
+    {
+      "id": 5810,
+      "name": "蓮花粉染劑",
+      "nameEn": "Lotus Pink Dye"
+    },
+    {
+      "id": 5811,
+      "name": "蜂鳥粉染劑",
+      "nameEn": "Colibri Pink Dye"
+    },
+    {
+      "id": 5812,
+      "name": "仙子梅染劑",
+      "nameEn": "Plum Purple Dye"
+    },
+    {
+      "id": 5813,
+      "name": "帝王紫染劑",
+      "nameEn": "Regal Purple Dye"
+    },
+    {
+      "id": 5814,
+      "name": "藍色色素",
+      "nameEn": "Blue Pigment"
+    },
+    {
+      "id": 5815,
+      "name": "紅色色素",
+      "nameEn": "Red Pigment"
+    },
+    {
+      "id": 5816,
+      "name": "黃色色素",
+      "nameEn": "Yellow Pigment"
+    },
+    {
+      "id": 5817,
+      "name": "灰色色素",
+      "nameEn": "Grey Pigment"
+    },
+    {
+      "id": 5818,
+      "name": "棕色色素",
+      "nameEn": "Brown Pigment"
+    },
+    {
+      "id": 5819,
+      "name": "綠色色素",
+      "nameEn": "Green Pigment"
+    },
+    {
+      "id": 5820,
+      "name": "紫色色素",
+      "nameEn": "Purple Pigment"
+    },
+    {
+      "id": 30116,
+      "name": "寶石紅染劑",
+      "nameEn": "Ruby Red Dye"
+    },
+    {
+      "id": 30117,
+      "name": "櫻桃粉染劑",
+      "nameEn": "Cherry Pink Dye"
+    },
+    {
+      "id": 30118,
+      "name": "絲雀黃染劑",
+      "nameEn": "Canary Yellow Dye"
+    },
+    {
+      "id": 30119,
+      "name": "香草黃染劑",
+      "nameEn": "Vanilla Yellow Dye"
+    },
+    {
+      "id": 30120,
+      "name": "龍騎藍染劑",
+      "nameEn": "Dragoon Blue Dye"
+    },
+    {
+      "id": 30121,
+      "name": "松石藍染劑",
+      "nameEn": "Turquoise Blue Dye"
+    },
+    {
+      "id": 30122,
+      "name": "砲銅黑染劑",
+      "nameEn": "Gunmetal Black Dye"
+    },
+    {
+      "id": 30123,
+      "name": "珍珠白染劑",
+      "nameEn": "Pearl White Dye"
+    },
+    {
+      "id": 30124,
+      "name": "金屬銅染劑",
+      "nameEn": "Metallic Brass Dye"
+    },
+    {
+      "id": 48163,
+      "name": "霓虹粉染劑",
+      "nameEn": "Neon Pink Dye"
+    },
+    {
+      "id": 48164,
+      "name": "明亮橙染劑",
+      "nameEn": "Bright Orange Dye"
+    },
+    {
+      "id": 48165,
+      "name": "霓虹綠染劑",
+      "nameEn": "Neon Green Dye"
+    },
+    {
+      "id": 48166,
+      "name": "霓虹黃染劑",
+      "nameEn": "Neon Yellow Dye"
+    },
+    {
+      "id": 48167,
+      "name": "羅蘭紫染劑",
+      "nameEn": "Violet Purple Dye"
+    },
+    {
+      "id": 48168,
+      "name": "碧空藍染劑",
+      "nameEn": "Azure Blue Dye"
+    },
+    {
+      "id": 48169,
+      "name": "金屬粉染劑",
+      "nameEn": "Metallic Pink Dye"
+    },
+    {
+      "id": 48170,
+      "name": "金屬寶石紅染劑",
+      "nameEn": "Metallic Ruby Red Dye"
+    },
+    {
+      "id": 48171,
+      "name": "金屬鈷鐵綠染劑",
+      "nameEn": "Metallic Cobalt Green Dye"
+    },
+    {
+      "id": 48172,
+      "name": "金屬黑暗藍染劑",
+      "nameEn": "Metallic Dark Blue Dye"
+    },
+    {
+      "id": 48227,
+      "name": "胭脂紅染劑",
+      "nameEn": "Carmine Red Dye"
+    }
+  ]
+}
