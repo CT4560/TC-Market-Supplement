@@ -2,12 +2,13 @@
 # 備份社群回報伺服器的資料庫（SQLite）。在跑 Docker 的那台機器上執行，通常由 cron 每天呼叫一次。
 #
 # 做法：從 Docker 資料卷讀出 collector.db，用 SQLite 的 backup API 複製（服務執行中也安全，
-# 不會複製到寫到一半的頁面），驗證備份檔的完整性，壓縮，最後刪掉超過保留天數的舊備份。
+# 不會複製到寫到一半的頁面），驗證備份檔的完整性，壓縮，最後交給 rotate-backups.sh 依保留規則整理舊備份
+# （每日備份留 60 天；每兩個月一組，封存每組最後一份、留一年）。
 #
 # 環境變數（都有預設值）：
 #   VOLUME       Docker 資料卷名稱      預設 database-dalamud-collector_collector-data
 #   BACKUP_DIR   備份放哪裡            預設 /root/backups/collector
-#   KEEP_DAYS    保留幾天             預設 14
+#   KEEP_DAILY_DAYS / KEEP_ARCHIVE_DAYS  保留規則的天數，預設 60／365，見 rotate-backups.sh
 #
 # 還原：停掉容器，`gunzip -k` 想還原的備份檔，把 .db 複製成資料卷裡的 collector.db（並刪掉舊的 -wal、-shm），
 # 確認檔案擁有者是 uid 1000（容器內的 node 使用者），再啟動容器。
@@ -17,7 +18,6 @@ set -euo pipefail
 
 VOLUME="${VOLUME:-database-dalamud-collector_collector-data}"
 BACKUP_DIR="${BACKUP_DIR:-/root/backups/collector}"
-KEEP_DAYS="${KEEP_DAYS:-14}"
 
 mkdir -p "$BACKUP_DIR"
 
@@ -55,5 +55,5 @@ gzip -f "$OUT"
 SIZE="$(stat -c %s "$OUT.gz")"
 echo "$(date -Is) backup ok $(basename "$OUT.gz") ${SIZE} bytes" >> "$BACKUP_DIR/backup.log"
 
-# 刪掉超過保留天數的舊備份。
-find "$BACKUP_DIR" -maxdepth 1 -name 'collector-*.db.gz' -mtime "+$KEEP_DAYS" -delete
+# 依保留規則封存與刪除舊備份（規則寫在 rotate-backups.sh）。
+BACKUP_DIR="$BACKUP_DIR" bash "$(dirname "$0")/rotate-backups.sh"

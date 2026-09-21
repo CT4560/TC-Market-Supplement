@@ -27,7 +27,7 @@ console.log(`[collector] item whitelist: ${items.items.length} items`);
 const server = createApp({ store });
 server.listen(port, host, () => console.log(`[collector] listening on ${host}:${port}`));
 
-// 成交只留 30 天：每小時清一次，啟動一分鐘後也清一次。
+// 成交只留一年（見 store.ts 的 SALES_RETENTION_MS）：每小時清一次，啟動一分鐘後也清一次。
 const prune = () => {
   const removed = store.pruneOldSales();
   if (removed > 0) console.log(`[collector] pruned ${removed} old sales`);

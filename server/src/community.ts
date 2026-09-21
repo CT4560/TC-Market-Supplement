@@ -1,5 +1,5 @@
 import { TW_WORLDS } from "./worlds.js";
-import type { CollectorStore, StoredListing, StoredSale } from "./store.js";
+import { SALES_RETENTION_MS, type CollectorStore, type StoredListing, type StoredSale } from "./store.js";
 
 // 社群回報：繁中服可交易、但 Universalis 沒有價格資料的物品（例如 7.5 整併前的舊染劑）
 // 沒有任何官方來源，價格只能靠玩家在遊戲裡掃描市場板、用外掛回報。
@@ -46,7 +46,6 @@ export const MAX_QUANTITY = 99;
 /** 掃描時間不能比現在早超過這麼久（外掛是掃描當下就上傳），也不能在未來。 */
 const MAX_CAPTURE_AGE_MS = 15 * 60_000;
 const MAX_CAPTURE_FUTURE_MS = 2 * 60_000;
-const SALES_RETENTION_MS = 30 * 86_400_000;
 /** 每個世界每個物品存整份掛單（上限同單次上傳）：統計與資料中心合併都需要完整清單。 */
 const STORED_LISTINGS_LIMIT = MAX_LISTINGS_PER_UPLOAD;
 /** 雇員名稱的長度上限（遊戲內雇員名稱遠短於這個數字）。 */

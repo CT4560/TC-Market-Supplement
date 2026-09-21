@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 
-/** 成交只留 30 天（依成交發生的時間，不是收到的時間）。 */
-export const SALES_RETENTION_MS = 30 * 86_400_000;
+/** 成交保留一年（依成交發生的時間，不是收到的時間）。公開 API 目前只開放查最近 30 天，見 read-model.ts 的 MAX_WINDOW_MS。 */
+export const SALES_RETENTION_MS = 365 * 86_400_000;
 
 /** 一筆目前的掛單。 */
 export interface StoredListing {

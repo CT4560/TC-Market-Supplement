@@ -17,7 +17,7 @@
 | 端點 | 說明 |
 | --- | --- |
 | `/api/v2/{world}/{itemIds}` | 目前的掛單、近期成交與統計。`{world}` 可以是世界編號（`4033`）、世界名稱（`巴哈姆特`）或資料中心名稱（`陸行鳥`，七個世界合併，每筆掛單與成交帶 `worldID`、`worldName`）。`{itemIds}` 逗號分隔，一次最多 112 個 |
-| `/api/v2/history/{world}/{itemIds}` | 成交歷史（保留 30 天） |
+| `/api/v2/history/{world}/{itemIds}` | 成交歷史（資料庫保留一年，API 目前開放最近 30 天） |
 | `/api/v2/worlds` | 世界清單 |
 | `/api/v2/data-centers` | 資料中心清單 |
 | `/api/v2/marketable` | 接受回報的物品編號（目前 112 個） |
@@ -78,7 +78,7 @@ ws.on("message", (data) => console.log(deserialize(data)));
 ## 資料
 
 - 掛單：每個世界每個物品存「最近一次掃描」的完整清單（最多 100 筆，新的掃描整份取代舊的；較舊的擷取不會蓋掉較新的）。每筆掛單記錄「伺服器第一次看到它的時間」，因為封包裡沒有真正的上架時間。
-- 成交：保留 30 天（依成交發生的時間），重複上傳會被唯一索引擋掉。**會存買家名稱**（市場板成交紀錄上本來就公開顯示）；繁中服的姓與名加起來最多 6 個字（中間的「·」也算一個字，只有空白不算），超過或含 `<` `>` 的成交略過。
+- 成交：保留一年（依成交發生的時間；公開 API 的查詢時間窗目前最長 30 天），重複上傳會被唯一索引擋掉。**會存買家名稱**（市場板成交紀錄上本來就公開顯示）；繁中服的姓與名加起來最多 6 個字（中間的「·」也算一個字，只有空白不算），超過或含 `<` `>` 的成交略過。
 - 雇員名稱（賣家在遊戲內自訂、公開顯示在市場板上）會跟掛單一起存。
 - 不存：上傳者的角色名稱、角色編號、上傳者身份。
 - 這些資料（含雇員名稱與買家名稱）都會經由公開 API 與 WebSocket 提供給任何人。
@@ -118,7 +118,10 @@ curl http://127.0.0.1:8787/health
 - `Dockerfile` 分兩階段：先編譯 TypeScript，執行階段只帶正式環境的相依套件與編譯結果，以非 root 的 `node` 使用者執行，內建健康檢查（打 `/health`）。
 - `docker-compose.yml` 只把埠綁在 `127.0.0.1`（主機端的埠可用 `COLLECTOR_PORT` 調整，預設 8787），不直接對外；請用同一台機器上的反向代理或 Cloudflare Tunnel 連進來（限流靠 `CF-Connecting-IP` 判斷來源 IP；Cloudflare Tunnel 支援 WebSocket，閒置 100 秒會斷，伺服器每 30 秒的 ping 會維持連線）。
 - 資料庫放在具名資料卷 `collector-data`（容器內 `/data/collector.db`）。備份請備份整個資料卷（SQLite 是 WAL 模式，會有 `-wal`、`-shm` 檔）。
-- 備份：`scripts/backup.sh` 用 SQLite 的 backup API 複製資料庫（服務執行中也安全）、驗證完整性、壓縮成 `collector-<UTC 時間>.db.gz`，預設放 `/root/backups/collector`、保留 14 天（可用 `BACKUP_DIR`、`KEEP_DAYS`、`VOLUME` 環境變數調整）。用 cron 每天跑一次，例如 `10 20 * * * /opt/database-dalamud-collector/scripts/backup.sh`。備份和資料庫在同一台機器，防得了誤刪與資料損壞，防不了整台機器遺失，重要的話請另外把備份檔複製到別處。還原步驟寫在腳本檔頭。
+- 備份：`scripts/backup.sh` 用 SQLite 的 backup API 複製資料庫（服務執行中也安全）、驗證完整性、壓縮成 `collector-<UTC 時間>.db.gz`，預設放 `/root/backups/collector`（可用 `BACKUP_DIR`、`VOLUME` 環境變數調整），然後由 `scripts/rotate-backups.sh` 依保留規則整理。用 cron 每天跑一次，例如 `10 20 * * * /opt/database-dalamud-collector/scripts/backup.sh`。還原步驟寫在腳本檔頭。
+  - **保留規則**：每日備份保留最近 60 天；一年分成六組（1～2 月、3～4 月……11～12 月，UTC），每組結束後把**該組最後一份**備份封存到 `archive/` 資料夾，封存的保留 365 天（約 6 份）。備份只是複製，不會動到正在使用的資料庫；成交紀錄在資料庫裡本身保留一年（見「資料」），所以每份封存備份都包含當時往前一年的成交。
+  - `scripts/test-rotate.sh` 模擬兩年的每日備份來驗證這套規則（約 2 分鐘，不碰資料庫與 docker）。
+  - 備份和資料庫在同一台機器，防得了誤刪與資料損壞，防不了整台機器遺失，重要的話請另外把備份檔（尤其 `archive/`）複製到別處。
 - 容器以唯讀根檔案系統、丟掉所有 capability、禁止提權、記憶體上限 384 MB 執行。
 - 物品白名單 `data/items.json` 打包在映像檔裡；要更新清單就重新執行 `npm run build-items`、再重新建置映像檔。
 - 建議設定 Cloudflare 快取，見下一節。

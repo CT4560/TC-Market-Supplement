@@ -169,11 +169,26 @@ describe("上傳資料驗證", () => {
     assert.deepEqual(result.value.sales.map((sale) => sale.buyerName), ["蓮·阿修貝爾"]);
   });
 
-  test("成交：太舊的略過（不整筆拒絕）、在未來的拒絕", () => {
+  test("成交保留一年：40 天前的成交會收，400 天前的略過", () => {
     const result = validateUpload(
       upload({
         sales: [
           { pricePerUnit: 5, quantity: 1, timestamp: NOW - 40 * 86_400_000 },
+          { pricePerUnit: 6, quantity: 1, timestamp: NOW - 400 * 86_400_000 },
+        ],
+      }),
+      ctx,
+    );
+    assert.ok(result.ok);
+    assert.deepEqual(result.value.sales.map((sale) => sale.pricePerUnit), [5]);
+    assert.equal(result.value.skipped.staleSales, 1);
+  });
+
+  test("成交：太舊的略過（不整筆拒絕）、在未來的拒絕", () => {
+    const result = validateUpload(
+      upload({
+        sales: [
+          { pricePerUnit: 5, quantity: 1, timestamp: NOW - 400 * 86_400_000 },
           { pricePerUnit: 6, quantity: 1, timestamp: NOW - 1000 },
         ],
       }),
@@ -341,7 +356,7 @@ describe("寫入資料庫", () => {
     assert.deepEqual(rows.map((row) => row.buyerName).sort(), ["買家乙", "買家甲"].sort());
   });
 
-  test("成交寫入成交表、重複上傳不會重複（唯一索引）、超過 30 天的會被清掉", () => {
+  test("成交寫入成交表、重複上傳不會重複（唯一索引）、超過一年的會被清掉", () => {
     const now = Date.now();
     const sale = { pricePerUnit: 777, quantity: 4, timestamp: now - 3_600_000 };
     const first = validateUpload(upload({ capturedAt: now - 100, listings: [], sales: [sale] }), { ...ctx, now });
@@ -352,7 +367,7 @@ describe("寫入資料庫", () => {
     assert.equal(applyUpload(store, first.value, now).salesInserted, 0);
     assert.equal(store.countSales(), before + 1);
 
-    assert.ok(store.pruneOldSales(now + 31 * 86_400_000) >= 1);
+    assert.ok(store.pruneOldSales(now + 366 * 86_400_000) >= 1);
   });
 });
 

@@ -8,7 +8,7 @@ export const DC_NAME = "陸行鳥";
 export const DC_REGION = "繁中服";
 export const DAY_MS = 86_400_000;
 export const DEFAULT_STATS_WITHIN_MS = 7 * DAY_MS;
-/** 成交只保留 30 天，所以統計與歷史的時間窗上限也是 30 天。 */
+/** 公開 API 查詢的時間窗上限：30 天。資料庫其實保留一年的成交（store.ts），目前只開放最近 30 天給 API。 */
 export const MAX_WINDOW_MS = 30 * DAY_MS;
 
 export type Json = Record<string, unknown>;
