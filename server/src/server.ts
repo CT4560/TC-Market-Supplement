@@ -83,6 +83,13 @@ export function createApp(options: AppOptions): http.Server {
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? "/", "http://localhost");
+      res.setHeader("x-robots-tag", "noindex, nofollow");
+
+      if (url.pathname === "/robots.txt") {
+        res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" });
+        res.end("User-agent: *\nDisallow: /\n");
+        return;
+      }
 
       if (url.pathname === "/health") {
         try {

@@ -113,6 +113,16 @@ describe("文件網站（/docs/）", () => {
     assert.equal(await head.text(), "");
   });
 
+  test("所有回應都帶 noindex，/robots.txt 禁止爬取", async () => {
+    for (const target of ["/docs/", "/docs/config.json", "/api/v2/worlds", "/health", "/nope"]) {
+      assert.equal((await get(target)).headers.get("x-robots-tag"), "noindex, nofollow", target);
+    }
+    const robots = await get("/robots.txt");
+    assert.equal(robots.status, 200);
+    assert.equal(await robots.text(), "User-agent: *\nDisallow: /\n");
+    assert.match(await (await get("/docs/")).text(), /<meta name="robots" content="noindex, nofollow">/);
+  });
+
   test("COMMUNITY_API_ENABLED 沒開時整個 /docs 回 404", async () => {
     apiEnabled = false;
     try {
