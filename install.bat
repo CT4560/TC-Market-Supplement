@@ -13,7 +13,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
 $PluginName = 'TC-Market Supplement'
-$RepoUrl = 'REPLACE_WITH_REPO_URL'
+$RepoUrl = 'https://raw.githubusercontent.com/CT4560/TC-Market-Supplement/main/repo.json'
 
 function Say($text, $color = 'White') { Write-Host $text -ForegroundColor $color }
 
@@ -36,9 +36,6 @@ try {
     Say "== $PluginName 安裝 ==" Cyan
     Say ''
 
-    if ($RepoUrl -like 'REPLACE_*') {
-        throw '這個安裝檔還沒填入儲存庫網址（尚未發佈），請向提供者索取新版的 install.bat。'
-    }
     if ($RepoUrl -notmatch '^https://[^"\\\s]+$') {
         throw "儲存庫網址格式不對：$RepoUrl"
     }

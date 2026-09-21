@@ -2,6 +2,7 @@
   "name": "tc-market-supplement-server",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "TC-Market Supplement 的社群回報伺服器：接收插件的匿名上傳，存進自己的 SQLite。",
   "scripts": {

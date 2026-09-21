@@ -35,7 +35,7 @@ dotnet build -c Release
 powershell -NoProfile -File .\pack.ps1
 ```
 
-輸出 `dist\latest.zip`（含 DLL 與 manifest）。`repo.json` 是自訂儲存庫的範本，下載連結與 `RepoUrl` 還是佔位字串，發佈時填入，並確認 `AssemblyVersion` 與這次打包的版本一致。插件沒有簽章，目前也沒有發佈到任何地方。
+輸出 `dist\latest.zip`（含 DLL 與 manifest）。`repo.json` 是自訂儲存庫的清單，發佈新版時更新 `AssemblyVersion`、`LastUpdate` 與 Changelog，並把 `latest.zip` 上傳到 GitHub Releases（下載連結是 `releases/latest/download/latest.zip`）。插件沒有簽章。
 
 ## 測試
 
@@ -65,4 +65,4 @@ $env:MBCOLLECTOR_ENDPOINT = 'http://127.0.0.1:8787'
 
 ## install.bat
 
-批次檔上半段只呼叫 PowerShell，`#PS_BEGIN` 之後才是 PowerShell 程式，所以上半段要維持純 ASCII、檔案用 CRLF。網址是檔案裡的 `$RepoUrl`，發佈後把 `REPLACE_WITH_REPO_URL` 換掉，並同步 `repo.json` 與 README。測試時設 `DALAMUD_CONFIG_PATH` 指向設定檔的複本，不要拿真的設定檔試。
+批次檔上半段只呼叫 PowerShell，`#PS_BEGIN` 之後才是 PowerShell 程式，所以上半段要維持純 ASCII、檔案用 CRLF。網址是檔案裡的 `$RepoUrl`，換儲存庫時要同步 `repo.json` 與 README。測試時設 `DALAMUD_CONFIG_PATH` 指向設定檔的複本，不要拿真的設定檔試。

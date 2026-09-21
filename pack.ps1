@@ -3,8 +3,8 @@
 # 用台灣服啟動器的 Dalamud（DALAMUD_HOME）建置，輸出在 dist\build，不動 bin\Release。
 
 param(
-    [string]$DalamudHome = 'C:\Users\charl\AppData\Roaming\FFXIVSimpleLauncher\Dalamud\Injector\',
-    [string]$DotnetRoot = 'C:\Users\charl\.dotnet10'
+    [string]$DalamudHome = "$env:APPDATA\FFXIVSimpleLauncher\Dalamud\Injector\",
+    [string]$DotnetRoot = "$env:USERPROFILE\.dotnet10"
 )
 
 $ErrorActionPreference = 'Stop'

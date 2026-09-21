@@ -22,7 +22,7 @@ FFXIV 繁中服的 Dalamud 插件。你在市場板查看物品時，它會把�
 
 ### 快速安裝（建議）
 
-1. 下載 `install.bat`（連結發佈後補上）。
+1. [下載 `install.bat`](https://github.com/CT4560/TC-Market-Supplement/releases/latest/download/install.bat)。
 2. 完全關閉遊戲與啟動器，雙擊 `install.bat`。Windows 跳出警告的話，選「其他資訊」→「仍要執行」。
 3. 進遊戲輸入 `/xlplugins`，搜尋 TC-Market Supplement 並安裝。
 
@@ -31,12 +31,12 @@ FFXIV 繁中服的 Dalamud 插件。你在市場板查看物品時，它會把�
 ### 自己加入儲存庫
 
 1. 遊戲內輸入 `/xlsettings`，打開「試驗性功能」分頁。
-2. 在「第三方外掛程式倉庫」貼上儲存庫網址（與 `install.bat` 相同，發佈後補上），按儲存。
+2. 在「第三方外掛程式倉庫」貼上 `https://raw.githubusercontent.com/CT4560/TC-Market-Supplement/main/repo.json`，按儲存。
 3. 輸入 `/xlplugins`，搜尋 TC-Market Supplement 並安裝。
 
 ### 手動安裝
 
-1. 取得 `latest.zip`，解壓縮到一個固定的資料夾。
+1. 從 [Releases](https://github.com/CT4560/TC-Market-Supplement/releases/latest) 下載 `latest.zip`，解壓縮到一個固定的資料夾。
 2. 遊戲內輸入 `/xlsettings`，「試驗性功能」分頁的「開發版外掛程式位置」加入 `MarketBoardCollector.dll` 的完整路徑，按儲存。
 3. 輸入 `/xlplugins`，在「開發版外掛程式」裡啟用。
 
@@ -51,3 +51,7 @@ FFXIV 繁中服的 Dalamud 插件。你在市場板查看物品時，它會把�
 ## 資料的用途
 
 回報的資料由公開的 API 提供給任何人使用，格式與 Universalis 相同，說明在 [server/README.md](server/README.md)；伺服器網域後面加 `/docs/` 有可以直接試用的開發者文件網站。開發插件的相關說明在 [DEVELOPMENT.md](DEVELOPMENT.md)。
+
+## 授權
+
+MIT，見 [LICENSE](LICENSE)。
