@@ -19,6 +19,12 @@ export interface AppOptions {
   log?: (message: string) => void;
 }
 
+/** 有被略過的項目才印，例如 skipped(staleSales=5)。 */
+function describeSkipped(skipped: Record<string, number>): string {
+  const parts = Object.entries(skipped).filter(([, count]) => count > 0).map(([name, count]) => name + "=" + count);
+  return parts.length > 0 ? " skipped(" + parts.join(",") + ")" : "";
+}
+
 function sendJson(res: http.ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   res.end(JSON.stringify(body));
@@ -144,7 +150,7 @@ export function createApp(options: AppOptions): http.Server {
 
         const applied = applyUpload(store, checked.value, now());
         log(
-          `[community] ${clientIp}: world=${checked.value.worldId} item=${checked.value.itemId} listings=${applied.listingsStored}${applied.listingsIgnored ? "(older than stored, ignored)" : ""} salesAdded=${applied.salesInserted}`,
+          `[community] ${clientIp}: world=${checked.value.worldId} item=${checked.value.itemId} listings=${applied.listingsStored}${applied.listingsIgnored ? "(older than stored, ignored)" : ""} salesAdded=${applied.salesInserted}${describeSkipped(checked.value.skipped)}`,
         );
         sendJson(res, 200, { ok: true, ...applied });
         return;

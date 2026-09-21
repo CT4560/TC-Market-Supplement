@@ -80,6 +80,8 @@ export interface NormalizedUpload {
   capturedAt: number;
   listings: UploadListing[];
   sales: UploadSale[];
+  /** 被略過（沒有整包拒絕）的項目數，只給 log 診斷用。 */
+  skipped: { staleSales: number; badNameSales: number; badNameListings: number };
 }
 
 export type ValidationResult = { ok: true; value: NormalizedUpload } | { ok: false; status: number; error: string };
@@ -117,6 +119,7 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
   if (!Array.isArray(rawListings) || rawListings.length > MAX_LISTINGS_PER_UPLOAD) return fail("invalid listings");
   if (!Array.isArray(rawSales) || rawSales.length > MAX_SALES_PER_UPLOAD) return fail("invalid sales");
 
+  const skipped = { staleSales: 0, badNameSales: 0, badNameListings: 0 };
   const listings: UploadListing[] = [];
   for (const raw of rawListings as Array<Record<string, unknown>>) {
     if (typeof raw !== "object" || raw === null) return fail("invalid listing");
@@ -133,7 +136,10 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
     const retainerName = typeof raw.retainerName === "string" ? raw.retainerName.slice(0, MAX_NAME_LENGTH) : "-";
     // 雇員名稱是遊戲內的自由文字，正常不會有角括號；Universalis 遇到 HTML 標籤會拒絕上傳。
     // 這裡沿用「單筆略過、不整包打回」的作法（跟太舊的成交一樣），不影響同一批其他合法資料。
-    if (/[<>]/.test(retainerName)) continue;
+    if (/[<>]/.test(retainerName)) {
+      skipped.badNameListings++;
+      continue;
+    }
 
     listings.push({
       pricePerUnit: raw.pricePerUnit,
@@ -151,14 +157,20 @@ export function validateUpload(body: unknown, context: ValidationContext): Valid
     if (!isInt(raw.timestamp, 1, Number.MAX_SAFE_INTEGER)) return fail("invalid sale timestamp");
     if (raw.timestamp > capturedAt + MAX_CAPTURE_FUTURE_MS) return fail("sale timestamp is in the future");
     const buyerName = typeof raw.buyerName === "string" ? raw.buyerName.trim() : "";
+    if (context.now - raw.timestamp > SALES_RETENTION_MS) {
+      skipped.staleSales++; // 太舊的成交不收（會被清掉），略過而不是整筆拒絕
+      continue;
+    }
     // 名稱不合理（超過 6 個字，或像 HTML 標籤）的成交整筆略過，不影響同一批其他合法資料；不截斷，避免存進錯的名字。
-    if (Array.from(buyerName.replace(/\s/g, "")).length > MAX_BUYER_NAME_CHARS || /[<>]/.test(buyerName)) continue;
-    if (context.now - raw.timestamp > SALES_RETENTION_MS) continue; // 太舊的成交不收（會被清掉），略過而不是整筆拒絕
+    if (Array.from(buyerName.replace(/\s/g, "")).length > MAX_BUYER_NAME_CHARS || /[<>]/.test(buyerName)) {
+      skipped.badNameSales++;
+      continue;
+    }
 
     sales.push({ pricePerUnit: raw.pricePerUnit, quantity: raw.quantity, buyerName, timestamp: raw.timestamp });
   }
 
-  return { ok: true, value: { worldId: input.worldId, itemId: input.itemId, capturedAt, listings, sales } };
+  return { ok: true, value: { worldId: input.worldId, itemId: input.itemId, capturedAt, listings, sales, skipped } };
 }
 
 export interface ApplyResult {
